@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+bin/
+lib/
+lib64/
+include/
+pyvenv.cfg
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Output directories
+mechanical_output/
+test_output/
+procore_output/
+output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+sample.pdf
+
+# Environment variables
+.env
+.env.local

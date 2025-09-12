@@ -1,0 +1,355 @@
+openapi: 3.0.3
+info:
+  title: PDF Drawing to Image Converter API
+  description: API for converting PDF mechanical drawings to tiled images for YOLO training
+  version: 0.1.0
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  
+paths:
+  /upload:
+    post:
+      summary: Upload PDF for conversion
+      description: Upload a PDF file containing mechanical drawings
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file to upload
+                drawing_number:
+                  type: string
+                  description: Optional drawing number identifier
+      responses:
+        '201':
+          description: PDF uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PDFDocument'
+        '400':
+          description: Invalid file or request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /procore/auth:
+    get:
+      summary: Initiate Procore OAuth flow
+      description: Redirect to Procore for OAuth authorization
+      responses:
+        '302':
+          description: Redirect to Procore authorization page
+          headers:
+            Location:
+              schema:
+                type: string
+                example: https://login-sandbox.procore.com/oauth/authorize
+
+  /procore/callback:
+    get:
+      summary: OAuth callback from Procore
+      description: Handle OAuth callback and exchange code for token
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Authorization code from Procore
+        - name: state
+          in: query
+          schema:
+            type: string
+          description: State parameter for CSRF protection
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Authentication successful
+                  access_token:
+                    type: string
+                    description: Access token for API calls
+        '400':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /procore/drawings:
+    get:
+      summary: List M-series drawings from Procore
+      description: Fetch list of M-series mechanical drawings from Procore
+      parameters:
+        - name: project_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Procore project ID
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 25
+            maximum: 100
+          description: Items per page
+      responses:
+        '200':
+          description: List of M-series drawings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  drawings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProcoreDrawing'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+        '401':
+          description: Not authenticated with Procore
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /convert:
+    post:
+      summary: Start conversion job
+      description: Create a new conversion job for selected documents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - document_ids
+              properties:
+                document_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: List of PDF document IDs to convert
+                procore_drawing_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: List of Procore drawing IDs to fetch and convert
+      responses:
+        '201':
+          description: Conversion job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionJob'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /status/{job_id}:
+    get:
+      summary: Check job status
+      description: Get current status and progress of a conversion job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Conversion job ID
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionJob'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /download/{job_id}:
+    get:
+      summary: Download converted images
+      description: Download ZIP file containing all converted and tiled images
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Conversion job ID
+      responses:
+        '200':
+          description: ZIP file download
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Job not found or not completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Job still processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /documents/{document_id}:
+    delete:
+      summary: Delete PDF document
+      description: Delete a PDF document and all associated converted images
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: PDF document ID
+      responses:
+        '204':
+          description: Document deleted successfully
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    PDFDocument:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        page_count:
+          type: integer
+        file_size:
+          type: integer
+        upload_date:
+          type: string
+          format: date-time
+        is_m_series:
+          type: boolean
+        drawing_number:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+
+    ProcoreDrawing:
+      type: object
+      properties:
+        id:
+          type: string
+        drawing_number:
+          type: string
+        name:
+          type: string
+        revision:
+          type: string
+        drawing_date:
+          type: string
+          format: date
+        file_size:
+          type: integer
+        page_count:
+          type: integer
+
+    ConversionJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, running, completed, failed, cancelled]
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        total_documents:
+          type: integer
+        processed_documents:
+          type: integer
+        total_pages:
+          type: integer
+        processed_pages:
+          type: integer
+        progress_percentage:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        error_message:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
