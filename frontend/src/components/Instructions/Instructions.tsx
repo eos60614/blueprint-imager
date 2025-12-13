@@ -39,8 +39,9 @@ export function Instructions({ expanded = false }: InstructionsProps) {
             Output format
           </h4>
           <ul className="text-sm text-blue-700 space-y-1">
-            <li>600 DPI PNG images (RGB, lossless)</li>
-            <li>1920x1920 pixel tiles with 250px overlap</li>
+            <li>High quality PNG images (RGB, lossless)</li>
+            <li>Configurable DPI, tile size, and overlap</li>
+            <li>Default: 600 DPI, 1920x1920 tiles, 250px overlap</li>
             <li>Optimized for YOLO training datasets</li>
           </ul>
         </div>

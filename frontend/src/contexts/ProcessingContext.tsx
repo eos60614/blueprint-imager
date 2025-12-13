@@ -12,10 +12,11 @@ import { convertPages } from '@/lib/api-client';
 import { useJobStatus } from '@/hooks/useJobStatus';
 import type { ProcessingState, ProcessingStatus } from '@/types/state';
 import { initialProcessingState } from '@/types/state';
+import type { ConversionSettings } from '@/types/api';
 
 interface ProcessingContextValue {
   processingState: ProcessingState;
-  startProcessing: (uploadId: number, selectedPages: number[]) => Promise<void>;
+  startProcessing: (uploadId: number, selectedPages: number[], settings?: ConversionSettings) => Promise<void>;
   reset: () => void;
 }
 
@@ -69,7 +70,7 @@ export function ProcessingProvider({ children }: ProcessingProviderProps) {
   }, [jobStatus, progress, processedPages, totalPages, errorMessage, downloadUrl, state.jobId]);
 
   const startProcessing = useCallback(
-    async (uploadId: number, selectedPages: number[]) => {
+    async (uploadId: number, selectedPages: number[], settings?: ConversionSettings) => {
       setState((prev) => ({
         ...prev,
         status: 'submitting',
@@ -80,6 +81,11 @@ export function ProcessingProvider({ children }: ProcessingProviderProps) {
         const response = await convertPages({
           uploadId,
           selectedPages,
+          ...(settings && {
+            dpi: settings.dpi,
+            tileSize: settings.tileSize,
+            overlap: settings.overlap,
+          }),
         });
 
         setState({

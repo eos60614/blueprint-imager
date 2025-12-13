@@ -12,12 +12,18 @@ import { SubmitButton } from '@/components/SubmitButton';
 import { DownloadButton } from '@/components/DownloadButton';
 import { Instructions } from '@/components/Instructions';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { ConversionSettings } from '@/components/ConversionSettings';
+import { DEFAULT_CONVERSION_SETTINGS } from '@/types/api';
+import type { ConversionSettings as ConversionSettingsType } from '@/types/api';
 
 function ProcessingSection() {
   const { documentState } = useUpload();
   const { selectionState } = useSelection();
   const { processingState, startProcessing, reset } = useProcessing();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [conversionSettings, setConversionSettings] = useState<ConversionSettingsType>(
+    DEFAULT_CONVERSION_SETTINGS
+  );
 
   if (!documentState) return null;
 
@@ -28,7 +34,7 @@ function ProcessingSection() {
 
   const handleConfirm = () => {
     setShowConfirmModal(false);
-    startProcessing(documentState.uploadId, selectionState.selectedPages);
+    startProcessing(documentState.uploadId, selectionState.selectedPages, conversionSettings);
   };
 
   const handleCancel = () => {
@@ -81,6 +87,15 @@ function ProcessingSection() {
         </h2>
 
         <div className="space-y-4">
+          {/* Conversion settings */}
+          {!isProcessing && !isComplete && (
+            <ConversionSettings
+              settings={conversionSettings}
+              onChange={setConversionSettings}
+              disabled={isSubmitting}
+            />
+          )}
+
           {/* Show submit button when not processing */}
           {!isProcessing && !isComplete && (
             <SubmitButton

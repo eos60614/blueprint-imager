@@ -98,7 +98,10 @@ def init_database():
                 upload_id INTEGER,
                 selected_pages TEXT,
                 total_pages INTEGER DEFAULT 0,
-                processed_pages INTEGER DEFAULT 0
+                processed_pages INTEGER DEFAULT 0,
+                dpi INTEGER DEFAULT 600,
+                tile_size INTEGER DEFAULT 1920,
+                overlap INTEGER DEFAULT 250
             )
         ''')
 

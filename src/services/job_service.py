@@ -8,9 +8,15 @@ from typing import List, Optional
 from ..db import get_db
 
 
-def create_upload_job(upload_id: int, selected_pages: List[int]) -> int:
+def create_upload_job(
+    upload_id: int,
+    selected_pages: List[int],
+    dpi: int = 600,
+    tile_size: int = 1920,
+    overlap: int = 250
+) -> int:
     """
-    Create a new conversion job for an upload with selected pages.
+    Create a new conversion job for an upload with selected pages and settings.
     Returns the job ID.
     """
     with get_db() as conn:
@@ -22,12 +28,12 @@ def create_upload_job(upload_id: int, selected_pages: List[int]) -> int:
         if not upload:
             raise ValueError(f"Upload {upload_id} not found")
 
-        # Create job
+        # Create job with conversion settings
         cursor.execute('''
-            INSERT INTO jobs (project_id, status, source, upload_id, selected_pages, total_pages, processed_pages)
-            VALUES (%s, 'pending', 'upload', %s, %s, %s, 0)
+            INSERT INTO jobs (project_id, status, source, upload_id, selected_pages, total_pages, processed_pages, dpi, tile_size, overlap)
+            VALUES (%s, 'pending', 'upload', %s, %s, %s, 0, %s, %s, %s)
             RETURNING id
-        ''', ('upload', upload_id, json.dumps(selected_pages), len(selected_pages)))
+        ''', ('upload', upload_id, json.dumps(selected_pages), len(selected_pages), dpi, tile_size, overlap))
 
         job_id = cursor.fetchone()[0]
 
@@ -190,3 +196,21 @@ def get_selected_pages(job_id: int) -> List[int]:
             return []
 
         return json.loads(row[0])
+
+
+def get_job_settings(job_id: int) -> Optional[dict]:
+    """Get the conversion settings for a job."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT dpi, tile_size, overlap FROM jobs WHERE id = %s', (job_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            return None
+
+        return {
+            'dpi': row[0] or 600,
+            'tile_size': row[1] or 1920,
+            'overlap': row[2] or 250,
+        }

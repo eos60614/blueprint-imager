@@ -25,10 +25,26 @@ export interface UploadCompleteResponse {
   status: 'ready';
 }
 
+// Conversion settings
+export interface ConversionSettings {
+  dpi: number;
+  tileSize: number;
+  overlap: number;
+}
+
+export const DEFAULT_CONVERSION_SETTINGS: ConversionSettings = {
+  dpi: 600,
+  tileSize: 1920,
+  overlap: 250,
+};
+
 // Convert endpoints
 export interface ConvertPagesRequest {
   uploadId: number;
   selectedPages: number[];
+  dpi?: number;
+  tileSize?: number;
+  overlap?: number;
 }
 
 export interface ConvertPagesResponse {

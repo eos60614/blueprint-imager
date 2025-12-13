@@ -20,6 +20,10 @@ class Job:
     selected_pages: Optional[List[int]] = None
     total_pages: int = 0
     processed_pages: int = 0
+    # Conversion settings (user-configurable)
+    dpi: int = 600
+    tile_size: int = 1920
+    overlap: int = 250
 
     @property
     def progress(self) -> float:
@@ -54,5 +58,9 @@ JOBS_ALTER_SQL = [
     "ALTER TABLE jobs ADD COLUMN upload_id INTEGER REFERENCES uploads(id)",
     "ALTER TABLE jobs ADD COLUMN selected_pages TEXT",
     "ALTER TABLE jobs ADD COLUMN total_pages INTEGER DEFAULT 0",
-    "ALTER TABLE jobs ADD COLUMN processed_pages INTEGER DEFAULT 0"
+    "ALTER TABLE jobs ADD COLUMN processed_pages INTEGER DEFAULT 0",
+    # Conversion settings columns
+    "ALTER TABLE jobs ADD COLUMN dpi INTEGER DEFAULT 600",
+    "ALTER TABLE jobs ADD COLUMN tile_size INTEGER DEFAULT 1920",
+    "ALTER TABLE jobs ADD COLUMN overlap INTEGER DEFAULT 250"
 ]

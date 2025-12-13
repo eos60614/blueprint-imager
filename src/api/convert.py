@@ -15,6 +15,7 @@ from ..services.job_service import (
     update_page_status,
     get_upload_for_job,
     get_selected_pages,
+    get_job_settings,
     mark_job_completed,
     mark_job_failed,
 )
@@ -25,6 +26,9 @@ router = APIRouter(prefix="/api/convert", tags=["Convert"])
 class ConvertPagesRequest(BaseModel):
     uploadId: int
     selectedPages: List[int]
+    dpi: int = 600
+    tileSize: int = 1920
+    overlap: int = 250
 
     @field_validator('selectedPages')
     @classmethod
@@ -34,6 +38,27 @@ class ConvertPagesRequest(BaseModel):
         if any(p < 1 for p in v):
             raise ValueError('Page numbers must be 1 or greater')
         return sorted(set(v))  # Deduplicate and sort
+
+    @field_validator('dpi')
+    @classmethod
+    def validate_dpi(cls, v: int) -> int:
+        if v < 72 or v > 2400:
+            raise ValueError('DPI must be between 72 and 2400')
+        return v
+
+    @field_validator('tileSize')
+    @classmethod
+    def validate_tile_size(cls, v: int) -> int:
+        if v < 256 or v > 4096:
+            raise ValueError('Tile size must be between 256 and 4096')
+        return v
+
+    @field_validator('overlap')
+    @classmethod
+    def validate_overlap(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError('Overlap must be non-negative')
+        return v
 
 
 class ConvertPagesResponse(BaseModel):
@@ -83,9 +108,15 @@ async def convert_pages(request: ConvertPagesRequest, background_tasks: Backgrou
             }
         )
 
-    # Create job
+    # Create job with conversion settings
     try:
-        job_id = create_upload_job(request.uploadId, request.selectedPages)
+        job_id = create_upload_job(
+            request.uploadId,
+            request.selectedPages,
+            dpi=request.dpi,
+            tile_size=request.tileSize,
+            overlap=request.overlap
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail={"error": "Invalid request", "message": str(e)})
 
@@ -119,9 +150,19 @@ def process_pages_job(job_id: int):
             mark_job_failed(job_id, "No pages selected")
             return
 
+        # Get conversion settings for this job
+        settings = get_job_settings(job_id)
+        if not settings:
+            mark_job_failed(job_id, "Job settings not found")
+            return
+
+        dpi = settings['dpi']
+        tile_size = settings['tile_size']
+        overlap = settings['overlap']
+
         s3_client = S3Client()
-        processor = PDFProcessor(dpi=config.PDF_DPI)
-        tiler = ImageTiler(tile_size=config.TILE_SIZE, overlap=config.TILE_OVERLAP)
+        processor = PDFProcessor(dpi=dpi)
+        tiler = ImageTiler(tile_size=tile_size, overlap=overlap)
 
         # Download PDF from S3
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
@@ -142,7 +183,7 @@ def process_pages_job(job_id: int):
                         from pdf2image import convert_from_path
                         images = convert_from_path(
                             pdf_path,
-                            dpi=config.PDF_DPI,
+                            dpi=dpi,
                             first_page=page_num,
                             last_page=page_num,
                             fmt='png'
