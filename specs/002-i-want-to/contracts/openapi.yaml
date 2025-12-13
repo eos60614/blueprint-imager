@@ -1,0 +1,467 @@
+openapi: 3.1.0
+info:
+  title: Blueprint Imager API - Upload Frontend
+  version: 2.0.0
+  description: |
+    Extended API for PDF upload frontend with page selection.
+    Adds S3 direct upload support and selective page conversion.
+
+servers:
+  - url: http://localhost:3001
+    description: Local development
+  - url: https://api.blueprint-imager.example.com
+    description: Production
+
+paths:
+  /api/upload/presign:
+    post:
+      summary: Get presigned URL for S3 upload
+      description: |
+        Generates a presigned PUT URL for direct browser-to-S3 upload.
+        The URL expires in 15 minutes.
+      operationId: getPresignedUrl
+      tags:
+        - Upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignedUrlRequest'
+            example:
+              fileName: "mechanical_drawings.pdf"
+              fileSize: 52428800
+              contentType: "application/pdf"
+      responses:
+        '200':
+          description: Presigned URL generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignedUrlResponse'
+              example:
+                uploadUrl: "https://blueprint-imager-uploads.s3.amazonaws.com/uploads/abc123/document.pdf?X-Amz-..."
+                s3Key: "uploads/abc123/document.pdf"
+                expiresIn: 900
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidFileType:
+                  value:
+                    error: "Invalid file type"
+                    message: "Only PDF files are accepted"
+                fileTooLarge:
+                  value:
+                    error: "File too large"
+                    message: "Maximum file size is 100MB"
+
+  /api/upload/complete:
+    post:
+      summary: Confirm upload completion
+      description: |
+        Called after successful S3 upload to register the document
+        and retrieve page count.
+      operationId: completeUpload
+      tags:
+        - Upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadCompleteRequest'
+            example:
+              s3Key: "uploads/abc123/document.pdf"
+      responses:
+        '200':
+          description: Upload registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadCompleteResponse'
+              example:
+                uploadId: 42
+                pageCount: 50
+                status: "ready"
+        '404':
+          description: S3 object not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Not found"
+                message: "Uploaded file not found in S3"
+        '422':
+          description: Invalid PDF
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid PDF"
+                message: "The uploaded file is not a valid PDF or has no pages"
+
+  /api/convert/pages:
+    post:
+      summary: Convert selected pages
+      description: |
+        Starts a conversion job for specific pages from an uploaded PDF.
+        Returns immediately with job ID; poll /api/jobs/{id} for progress.
+      operationId: convertPages
+      tags:
+        - Convert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConvertPagesRequest'
+            example:
+              uploadId: 42
+              selectedPages: [1, 2, 3, 4, 5, 8, 12, 13, 14, 15]
+      responses:
+        '202':
+          description: Conversion job started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConvertPagesResponse'
+              example:
+                jobId: 123
+                status: "processing"
+                totalPages: 10
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noPages:
+                  value:
+                    error: "Invalid selection"
+                    message: "At least one page must be selected"
+                invalidPages:
+                  value:
+                    error: "Invalid pages"
+                    message: "Pages [51, 52] exceed document length (50 pages)"
+        '404':
+          description: Upload not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Not found"
+                message: "Upload with ID 42 not found"
+
+  /api/jobs/{jobId}:
+    get:
+      summary: Get job status
+      description: Poll this endpoint to track conversion progress.
+      operationId: getJobStatus
+      tags:
+        - Jobs
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Job ID returned from convert endpoint
+      responses:
+        '200':
+          description: Job status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+              examples:
+                processing:
+                  value:
+                    jobId: 123
+                    status: "processing"
+                    progress: 45
+                    processedPages: 4
+                    totalPages: 10
+                completed:
+                  value:
+                    jobId: 123
+                    status: "completed"
+                    progress: 100
+                    processedPages: 10
+                    totalPages: 10
+                    downloadUrl: "https://blueprint-imager-uploads.s3.amazonaws.com/output/123/tiles.zip?X-Amz-..."
+                failed:
+                  value:
+                    jobId: 123
+                    status: "failed"
+                    progress: 30
+                    processedPages: 3
+                    totalPages: 10
+                    errorMessage: "PDF processing failed on page 4: corrupted stream"
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Not found"
+                message: "Job with ID 123 not found"
+
+  /api/jobs/{jobId}/download:
+    get:
+      summary: Download job results
+      description: |
+        Returns a ZIP file containing all generated tiles.
+        Only available when job status is "completed".
+      operationId: downloadJobResults
+      tags:
+        - Jobs
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: ZIP file download
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: 'attachment; filename="job_123_tiles.zip"'
+        '400':
+          description: Job not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Not ready"
+                message: "Job is not yet completed"
+        '404':
+          description: Job not found
+
+  # Existing endpoints (unchanged)
+  /:
+    get:
+      summary: API root
+      operationId: getRoot
+      tags:
+        - Health
+      responses:
+        '200':
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  version:
+                    type: string
+
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+
+components:
+  schemas:
+    PresignedUrlRequest:
+      type: object
+      required:
+        - fileName
+        - fileSize
+        - contentType
+      properties:
+        fileName:
+          type: string
+          description: Original filename
+          example: "mechanical_drawings.pdf"
+        fileSize:
+          type: integer
+          description: File size in bytes
+          minimum: 1
+          maximum: 104857600
+          example: 52428800
+        contentType:
+          type: string
+          description: MIME type (must be application/pdf)
+          enum:
+            - application/pdf
+          example: "application/pdf"
+
+    PresignedUrlResponse:
+      type: object
+      required:
+        - uploadUrl
+        - s3Key
+        - expiresIn
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+          description: Presigned PUT URL for S3 upload
+        s3Key:
+          type: string
+          description: S3 object key to use in subsequent requests
+        expiresIn:
+          type: integer
+          description: Seconds until URL expires
+          example: 900
+
+    UploadCompleteRequest:
+      type: object
+      required:
+        - s3Key
+      properties:
+        s3Key:
+          type: string
+          description: S3 key from presigned URL response
+
+    UploadCompleteResponse:
+      type: object
+      required:
+        - uploadId
+        - pageCount
+        - status
+      properties:
+        uploadId:
+          type: integer
+          description: Database ID for this upload
+        pageCount:
+          type: integer
+          description: Total pages in the PDF
+          minimum: 1
+        status:
+          type: string
+          enum:
+            - ready
+          description: Upload status
+
+    ConvertPagesRequest:
+      type: object
+      required:
+        - uploadId
+        - selectedPages
+      properties:
+        uploadId:
+          type: integer
+          description: Upload ID from complete endpoint
+        selectedPages:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          minItems: 1
+          description: Array of page numbers to convert
+          example: [1, 2, 3, 4, 5, 8, 12, 13, 14, 15]
+
+    ConvertPagesResponse:
+      type: object
+      required:
+        - jobId
+        - status
+        - totalPages
+      properties:
+        jobId:
+          type: integer
+          description: Job ID for tracking progress
+        status:
+          type: string
+          enum:
+            - processing
+          description: Initial job status
+        totalPages:
+          type: integer
+          description: Number of pages to be converted
+
+    JobStatusResponse:
+      type: object
+      required:
+        - jobId
+        - status
+        - progress
+        - processedPages
+        - totalPages
+      properties:
+        jobId:
+          type: integer
+        status:
+          type: string
+          enum:
+            - pending
+            - processing
+            - completed
+            - failed
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Completion percentage
+        processedPages:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 1
+        errorMessage:
+          type: string
+          description: Error details if status is failed
+        downloadUrl:
+          type: string
+          format: uri
+          description: Presigned download URL if status is completed
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error type/code
+        message:
+          type: string
+          description: Human-readable error message
+
+tags:
+  - name: Upload
+    description: PDF upload endpoints
+  - name: Convert
+    description: Image conversion endpoints
+  - name: Jobs
+    description: Job tracking endpoints
+  - name: Health
+    description: Service health endpoints
