@@ -70,7 +70,7 @@ export function UploadProvider({ children }: UploadProviderProps) {
           ...prev,
           uploadProgress: progress.percentage,
         }));
-      });
+      }, file.name);
 
       // Complete upload and get page count
       const completed = await completeUpload({

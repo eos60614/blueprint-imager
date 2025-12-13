@@ -13,7 +13,7 @@ build/
 
 # Virtual Environment
 bin/
-lib/
+/lib/
 lib64/
 include/
 pyvenv.cfg
@@ -54,3 +54,5 @@ node_modules/
 frontend/.env.local
 frontend/.env.*.local
 !frontend/.env.local.example
+frontend/test-results/
+frontend/playwright-report/
