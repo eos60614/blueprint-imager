@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { Navigation } from '@/components/Navigation'
 
 export const metadata: Metadata = {
   title: 'Blueprint Imager - PDF to Tiles Converter',
@@ -29,6 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-gray-50">
+        <Navigation />
         <main className="py-6 sm:py-8">
           {children}
         </main>

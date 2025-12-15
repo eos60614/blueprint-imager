@@ -205,7 +205,8 @@ def process_pages_job(job_id: int):
                         # Upload tiles to S3
                         for tile in tiles:
                             tile_path = Path(tile['file_path'])
-                            s3_key = f"output/{job_id}/tiles/page_{page_num}_{tile_path.name}"
+                            # tile_path.name is already "page_{page_num}_tile_{row}_{col}.png"
+                            s3_key = f"output/{job_id}/tiles/{tile_path.name}"
                             s3_client.upload_file(str(tile_path), s3_key, content_type='image/png')
 
                         update_page_status(job_id, page_num, 'completed', tile_count=len(tiles))

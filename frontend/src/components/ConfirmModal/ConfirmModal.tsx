@@ -10,6 +10,7 @@ interface ConfirmModalProps {
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  variant?: 'default' | 'danger';
 }
 
 export function ConfirmModal({
@@ -20,6 +21,7 @@ export function ConfirmModal({
   cancelText = 'Cancel',
   onConfirm,
   onCancel,
+  variant = 'default',
 }: ConfirmModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
@@ -84,7 +86,11 @@ export function ConfirmModal({
             ref={confirmButtonRef}
             type="button"
             onClick={onConfirm}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
+              variant === 'danger'
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             {confirmText}
           </button>

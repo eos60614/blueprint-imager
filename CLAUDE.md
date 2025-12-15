@@ -4,10 +4,10 @@
 PDF to Image converter for YOLO training. Converts mechanical drawings (M-series from Procore and manual uploads) to tiled PNG images at 600 DPI with 1920x1920 tiles and 13% overlap.
 
 ## Current Feature
-**Branch**: 002-i-want-to
+**Branch**: 005-browse-history
 **Status**: Implementation complete
-**Spec**: `/specs/002-i-want-to/spec.md`
-**Plan**: `/specs/002-i-want-to/plan.md`
+**Spec**: `/specs/005-browse-history/spec.md`
+**Plan**: `/specs/005-browse-history/plan.md`
 
 ## Tech Stack
 
@@ -228,3 +228,10 @@ Configure in Vercel dashboard:
 
 ---
 *Context for Claude Code - Last updated: 2025-12-13*
+
+## Active Technologies
+- Python 3.11+ (Backend), TypeScript 5.x (Frontend) + FastAPI, Next.js 14 (App Router), pdfjs-dist, SWR, Tailwind CSS (005-browse-history)
+- SQLite (jobs/uploads), AWS S3 (PDFs/tiles), localStorage (history references) (005-browse-history)
+
+## Recent Changes
+- 005-browse-history: Added Python 3.11+ (Backend), TypeScript 5.x (Frontend) + FastAPI, Next.js 14 (App Router), pdfjs-dist, SWR, Tailwind CSS

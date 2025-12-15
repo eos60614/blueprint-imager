@@ -26,9 +26,14 @@ class S3Client:
             session_kwargs['aws_access_key_id'] = key_id
             session_kwargs['aws_secret_access_key'] = secret_key
 
+        # Use virtual-hosted-style URLs with region for proper signing
         self.s3 = boto3.client(
             's3',
             region_name=self.region,
+            config=boto3.session.Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'virtual'}
+            ),
             **session_kwargs
         )
 

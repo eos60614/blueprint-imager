@@ -1,0 +1,440 @@
+openapi: 3.0.3
+info:
+  title: Blueprint Imager - History API
+  description: API endpoints for browsing upload history, viewing pages, and tiles
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3001
+    description: Local development server
+
+paths:
+  /api/jobs:
+    get:
+      summary: Get multiple jobs by IDs
+      description: |
+        Batch fetch job details for history synchronization.
+        Used to sync localStorage entries with server state.
+      operationId: getJobsByIds
+      tags:
+        - Jobs
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          description: Comma-separated list of job IDs
+          schema:
+            type: string
+            example: "1,2,3,4,5"
+      responses:
+        '200':
+          description: List of job details (missing IDs omitted)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListResponse'
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/jobs/{jobId}:
+    get:
+      summary: Get job status and details
+      description: Existing endpoint, enhanced with more fields for history view
+      operationId: getJobStatus
+      tags:
+        - Jobs
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobDetailsResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/jobs/{jobId}/pages:
+    get:
+      summary: Get processed pages for a job
+      description: Returns list of pages with tile counts and grid dimensions
+      operationId: getJobPages
+      tags:
+        - Jobs
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: List of processed pages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobPagesResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/jobs/{jobId}/pages/{pageNum}/tiles:
+    get:
+      summary: Get tiles for a specific page
+      description: Returns tile grid with presigned S3 URLs for each tile
+      operationId: getPageTiles
+      tags:
+        - Jobs
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/PageNum'
+      responses:
+        '200':
+          description: Tile grid with presigned URLs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TileGridResponse'
+        '404':
+          description: Job or page not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/jobs/{jobId}/pdf-url:
+    get:
+      summary: Get presigned URL for original PDF
+      description: Returns a presigned S3 URL for the original PDF file (for thumbnail rendering)
+      operationId: getPdfUrl
+      tags:
+        - Jobs
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Presigned URL for PDF
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PdfUrlResponse'
+        '404':
+          description: Job or PDF not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/jobs/{jobId}/download:
+    get:
+      summary: Download tiles as ZIP
+      description: Existing endpoint - returns ZIP file of all tiles
+      operationId: downloadJobResults
+      tags:
+        - Jobs
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: ZIP file containing tiles
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Job not completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  parameters:
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      description: Job identifier
+      schema:
+        type: integer
+        minimum: 1
+
+    PageNum:
+      name: pageNum
+      in: path
+      required: true
+      description: Page number (1-indexed)
+      schema:
+        type: integer
+        minimum: 1
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+          example: "Not found"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Job with ID 123 not found"
+
+    JobListResponse:
+      type: object
+      required:
+        - jobs
+      properties:
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobSummary'
+
+    JobSummary:
+      type: object
+      required:
+        - jobId
+        - status
+        - fileName
+        - uploadedAt
+      properties:
+        jobId:
+          type: integer
+          example: 42
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        fileName:
+          type: string
+          example: "floor-plans.pdf"
+        uploadedAt:
+          type: string
+          format: date-time
+          example: "2025-12-13T10:30:00Z"
+        pageCount:
+          type: integer
+          example: 25
+        selectedPages:
+          type: array
+          items:
+            type: integer
+          example: [1, 2, 3, 4, 5]
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+          example: 75.5
+
+    JobDetailsResponse:
+      type: object
+      required:
+        - jobId
+        - status
+        - progress
+        - uploadId
+        - fileName
+        - uploadedAt
+        - totalPages
+        - selectedPages
+        - processedPages
+      properties:
+        jobId:
+          type: integer
+          example: 42
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+          example: 100
+        uploadId:
+          type: integer
+          example: 15
+        fileName:
+          type: string
+          example: "floor-plans.pdf"
+        uploadedAt:
+          type: string
+          format: date-time
+          example: "2025-12-13T10:30:00Z"
+        totalPages:
+          type: integer
+          description: Total pages in original PDF
+          example: 25
+        selectedPages:
+          type: array
+          items:
+            type: integer
+          example: [1, 2, 3, 4, 5]
+        processedPages:
+          type: integer
+          description: Number of pages processed so far
+          example: 5
+        dpi:
+          type: integer
+          example: 600
+        tileSize:
+          type: integer
+          example: 1920
+        overlap:
+          type: integer
+          example: 250
+        errorMessage:
+          type: string
+          nullable: true
+          description: Error message if status is 'failed'
+        downloadUrl:
+          type: string
+          nullable: true
+          description: Download URL if status is 'completed'
+          example: "/api/jobs/42/download"
+
+    JobStatus:
+      type: string
+      enum:
+        - pending
+        - processing
+        - completed
+        - failed
+      example: completed
+
+    JobPagesResponse:
+      type: object
+      required:
+        - jobId
+        - pages
+      properties:
+        jobId:
+          type: integer
+          example: 42
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageInfo'
+
+    PageInfo:
+      type: object
+      required:
+        - pageNumber
+        - tileCount
+        - gridSize
+      properties:
+        pageNumber:
+          type: integer
+          description: 1-indexed page number
+          example: 1
+        tileCount:
+          type: integer
+          description: Total tiles generated for this page
+          example: 42
+        gridSize:
+          type: object
+          required:
+            - rows
+            - cols
+          properties:
+            rows:
+              type: integer
+              example: 6
+            cols:
+              type: integer
+              example: 7
+
+    TileGridResponse:
+      type: object
+      required:
+        - jobId
+        - pageNumber
+        - tiles
+        - totalTiles
+        - gridSize
+      properties:
+        jobId:
+          type: integer
+          example: 42
+        pageNumber:
+          type: integer
+          example: 1
+        tiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/TileInfo'
+        totalTiles:
+          type: integer
+          example: 42
+        gridSize:
+          type: object
+          required:
+            - rows
+            - cols
+          properties:
+            rows:
+              type: integer
+              example: 6
+            cols:
+              type: integer
+              example: 7
+
+    TileInfo:
+      type: object
+      required:
+        - row
+        - col
+        - url
+      properties:
+        row:
+          type: integer
+          description: 0-indexed row position
+          example: 0
+        col:
+          type: integer
+          description: 0-indexed column position
+          example: 0
+        url:
+          type: string
+          format: uri
+          description: Presigned S3 URL (valid for 1 hour)
+          example: "https://bucket.s3.amazonaws.com/output/42/tiles/page_1_tile_0_0.png?..."
+        width:
+          type: integer
+          description: Tile width in pixels
+          example: 1920
+        height:
+          type: integer
+          description: Tile height in pixels
+          example: 1920
+
+    PdfUrlResponse:
+      type: object
+      required:
+        - url
+        - expiresIn
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Presigned S3 URL for PDF
+          example: "https://bucket.s3.amazonaws.com/uploads/15/floor-plans.pdf?..."
+        expiresIn:
+          type: integer
+          description: URL validity in seconds
+          example: 3600

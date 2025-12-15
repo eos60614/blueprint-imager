@@ -17,7 +17,7 @@ import { DEFAULT_CONVERSION_SETTINGS } from '@/types/api';
 import type { ConversionSettings as ConversionSettingsType } from '@/types/api';
 
 function ProcessingSection() {
-  const { documentState } = useUpload();
+  const { documentState, uploadState } = useUpload();
   const { selectionState } = useSelection();
   const { processingState, startProcessing, reset } = useProcessing();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -34,7 +34,15 @@ function ProcessingSection() {
 
   const handleConfirm = () => {
     setShowConfirmModal(false);
-    startProcessing(documentState.uploadId, selectionState.selectedPages, conversionSettings);
+    startProcessing(
+      documentState.uploadId,
+      selectionState.selectedPages,
+      conversionSettings,
+      {
+        fileName: uploadState.fileName || 'document.pdf',
+        pageCount: documentState.pageCount,
+      }
+    );
   };
 
   const handleCancel = () => {

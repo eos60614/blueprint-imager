@@ -14,6 +14,13 @@ import type {
   ErrorResponse,
   isErrorResponse,
 } from '@/types/api';
+import type {
+  JobListResponse,
+  JobDetails,
+  JobPagesResponse,
+  TileGridResponse,
+  PdfUrlResponse,
+} from '@/types/history';
 
 class ApiError extends Error {
   constructor(
@@ -113,6 +120,92 @@ export async function getJobStatus(jobId: number): Promise<JobStatusResponse> {
  */
 export function getDownloadUrl(jobId: number): string {
   return `${config.apiUrl}/api/jobs/${jobId}/download`;
+}
+
+
+// ============================================================
+// History feature API functions
+// ============================================================
+
+/**
+ * Get multiple jobs by IDs (for history sync).
+ */
+export async function getJobsByIds(jobIds: number[]): Promise<JobListResponse> {
+  if (jobIds.length === 0) {
+    return { jobs: [] };
+  }
+
+  const idsParam = jobIds.join(',');
+  const response = await fetch(`${config.apiUrl}/api/jobs?ids=${idsParam}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return handleResponse<JobListResponse>(response);
+}
+
+/**
+ * Get detailed job information.
+ */
+export async function getJobDetails(jobId: number): Promise<JobDetails> {
+  const response = await fetch(`${config.apiUrl}/api/jobs/${jobId}/details`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return handleResponse<JobDetails>(response);
+}
+
+/**
+ * Get pages for a job.
+ */
+export async function getJobPages(jobId: number): Promise<JobPagesResponse> {
+  const response = await fetch(`${config.apiUrl}/api/jobs/${jobId}/pages`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return handleResponse<JobPagesResponse>(response);
+}
+
+/**
+ * Get tiles for a specific page.
+ */
+export async function getPageTiles(
+  jobId: number,
+  pageNum: number
+): Promise<TileGridResponse> {
+  const response = await fetch(
+    `${config.apiUrl}/api/jobs/${jobId}/pages/${pageNum}/tiles`,
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  return handleResponse<TileGridResponse>(response);
+}
+
+/**
+ * Get presigned URL for the original PDF.
+ */
+export async function getPdfUrl(jobId: number): Promise<PdfUrlResponse> {
+  const response = await fetch(`${config.apiUrl}/api/jobs/${jobId}/pdf-url`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return handleResponse<PdfUrlResponse>(response);
 }
 
 export { ApiError };
