@@ -2,17 +2,47 @@ from pathlib import Path
 from typing import List, Tuple
 from PIL import Image
 import math
+import numpy as np
 
 # Increase decompression bomb limit for large mechanical drawings
 Image.MAX_IMAGE_PIXELS = 500000000  # 500 million pixels
 
 
 class ImageTiler:
-    def __init__(self, tile_size: int = 1920, overlap: int = 250):
+    def __init__(self, tile_size: int = 1920, overlap: int = 250, blank_threshold: float = 0.80):
         self.tile_size = tile_size
         self.overlap = overlap
         self.stride = tile_size - overlap  # 1670
-        
+        self.blank_threshold = blank_threshold  # % of white pixels to consider blank
+
+    def is_tile_blank(self, tile: Image.Image, threshold: float = None) -> bool:
+        """
+        Check if a tile is mostly blank (white).
+
+        A pixel is considered "white" if all RGB channels are >= 250 (near-white).
+        The tile is blank if the percentage of white pixels >= threshold.
+
+        Args:
+            tile: PIL Image in RGB mode
+            threshold: Override for blank_threshold (default uses self.blank_threshold)
+
+        Returns:
+            True if tile is blank (>= threshold white), False otherwise
+        """
+        if threshold is None:
+            threshold = self.blank_threshold
+
+        # Convert to numpy array for fast computation
+        img_array = np.array(tile)
+
+        # A pixel is "white" if all RGB channels are >= 250
+        white_mask = np.all(img_array >= 250, axis=2)
+
+        # Calculate percentage of white pixels
+        white_ratio = np.mean(white_mask)
+
+        return white_ratio >= threshold
+
     def tile_image(self, image_path: str, output_dir: str) -> List[dict]:
         image_path = Path(image_path)
         output_dir = Path(output_dir)
@@ -52,10 +82,13 @@ class ImageTiler:
                     padded_tile.paste(tile, (0, 0))
                     tile = padded_tile
                 
+                # Check if tile is blank before saving
+                is_blank = self.is_tile_blank(tile)
+
                 tile_filename = f"{base_name}_tile_{row}_{col}.png"
                 tile_path = output_dir / tile_filename
                 tile.save(str(tile_path), 'PNG', compress_level=0)
-                
+
                 tiles.append({
                     "file_path": str(tile_path),
                     "tile_index": tile_index,
@@ -64,9 +97,10 @@ class ImageTiler:
                     "x": x,
                     "y": y,
                     "width": self.tile_size,
-                    "height": self.tile_size
+                    "height": self.tile_size,
+                    "is_blank": is_blank
                 })
-                
+
                 tile_index += 1
         
         return tiles

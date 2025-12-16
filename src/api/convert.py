@@ -209,6 +209,25 @@ def process_pages_job(job_id: int):
                             s3_key = f"output/{job_id}/tiles/{tile_path.name}"
                             s3_client.upload_file(str(tile_path), s3_key, content_type='image/png')
 
+                        # Save tile metadata (including is_blank) as JSON to S3
+                        import json
+                        tile_metadata = [
+                            {
+                                'row': t['row'],
+                                'col': t['column'],
+                                'is_blank': bool(t.get('is_blank', False)),  # Convert numpy bool to Python bool
+                                'width': int(t['width']),
+                                'height': int(t['height']),
+                            }
+                            for t in tiles
+                        ]
+                        metadata_key = f"output/{job_id}/tiles/page_{page_num}_metadata.json"
+                        s3_client.upload_bytes(
+                            json.dumps(tile_metadata).encode('utf-8'),
+                            metadata_key,
+                            content_type='application/json'
+                        )
+
                         update_page_status(job_id, page_num, 'completed', tile_count=len(tiles))
 
                     except Exception as e:

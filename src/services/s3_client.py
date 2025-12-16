@@ -142,6 +142,20 @@ class S3Client:
 
         self.s3.upload_fileobj(fileobj, self.bucket_name, s3_key, ExtraArgs=extra_args or None)
 
+    def upload_bytes(self, data: bytes, s3_key: str, content_type: Optional[str] = None) -> None:
+        """Upload bytes directly to S3."""
+        import io
+        fileobj = io.BytesIO(data)
+        self.upload_fileobj(fileobj, s3_key, content_type)
+
+    def download_bytes(self, s3_key: str) -> bytes:
+        """Download an S3 object as bytes."""
+        import io
+        fileobj = io.BytesIO()
+        self.s3.download_fileobj(self.bucket_name, s3_key, fileobj)
+        fileobj.seek(0)
+        return fileobj.read()
+
     def list_objects(self, prefix: str) -> list:
         """List objects with a given prefix."""
         response = self.s3.list_objects_v2(

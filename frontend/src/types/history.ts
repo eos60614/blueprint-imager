@@ -117,6 +117,7 @@ export interface TileInfo {
   url: string;                   // Presigned S3 URL
   width?: number;                // Pixel width (usually tileSize)
   height?: number;               // Pixel height (may vary at edges)
+  isBlank?: boolean;             // True if tile is 80%+ white (mostly blank)
 }
 
 /**

@@ -40,7 +40,7 @@ class Config:
     TILE_OVERLAP: int = int(os.environ.get('TILE_OVERLAP', '250'))
 
     # Upload limits
-    MAX_FILE_SIZE: int = int(os.environ.get('MAX_FILE_SIZE', str(100 * 1024 * 1024)))  # 100MB
+    MAX_FILE_SIZE: int = int(os.environ.get('MAX_FILE_SIZE', str(500 * 1024 * 1024)))  # 500MB
 
     # Procore (existing)
     PROCORE_CLIENT_ID: str = os.environ.get('PROCORE_CLIENT_ID', '')
@@ -54,6 +54,10 @@ class Config:
         'CORS_ORIGINS',
         'http://localhost:3000,https://*.vercel.app'
     ).split(',')
+
+    # Roboflow
+    ROBOFLOW_API_KEY: str = os.environ.get('ROBOFLOW_API_KEY', '')
+    ROBOFLOW_PROJECT_NAME: str = os.environ.get('ROBOFLOW_PROJECT_NAME', '')
 
 
 config = Config()

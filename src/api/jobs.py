@@ -91,6 +91,7 @@ class TileInfo(BaseModel):
     url: str
     width: Optional[int] = None
     height: Optional[int] = None
+    isBlank: bool = False
 
 
 class TileGridResponse(BaseModel):
@@ -104,6 +105,16 @@ class TileGridResponse(BaseModel):
 class PdfUrlResponse(BaseModel):
     url: str
     expiresIn: int
+
+
+class TileSelection(BaseModel):
+    pageNum: int
+    row: int
+    col: int
+
+
+class DownloadTilesRequest(BaseModel):
+    tiles: List[TileSelection]
 
 
 @router.get("/{job_id}", response_model=JobStatusResponse)
@@ -198,6 +209,80 @@ async def download_job_results(job_id: int):
             media_type="application/zip",
             headers={
                 "Content-Disposition": f'attachment; filename="job_{job_id}_tiles.zip"'
+            }
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Download failed", "message": str(e)}
+        )
+
+
+@router.post("/{job_id}/download-tiles")
+async def download_selected_tiles(job_id: int, request: DownloadTilesRequest):
+    """
+    Download selected tiles as a ZIP file.
+    Accepts a list of tile selections (pageNum, row, col).
+    """
+    if not request.tiles:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "No tiles selected", "message": "At least one tile must be selected"}
+        )
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify job exists
+        cursor.execute('SELECT status FROM jobs WHERE id = %s', (job_id,))
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "Not found", "message": f"Job with ID {job_id} not found"}
+        )
+
+    if row[0] != 'completed':
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Not ready", "message": "Job is not yet completed"}
+        )
+
+    # Get selected tiles from S3 and create ZIP
+    s3_client = S3Client()
+
+    try:
+        # Create ZIP in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for tile in request.tiles:
+                # S3 key pattern: output/{job_id}/tiles/page_{page_num}_tile_{row}_{col}.png
+                s3_key = f"output/{job_id}/tiles/page_{tile.pageNum}_tile_{tile.row}_{tile.col}.png"
+                filename = f"page_{tile.pageNum}_tile_{tile.row}_{tile.col}.png"
+
+                try:
+                    # Download file content
+                    response = s3_client.s3.get_object(
+                        Bucket=s3_client.bucket_name,
+                        Key=s3_key
+                    )
+                    file_content = response['Body'].read()
+
+                    # Add to ZIP
+                    zip_file.writestr(f"tiles/{filename}", file_content)
+                except Exception:
+                    # Skip tiles that don't exist
+                    continue
+
+        zip_buffer.seek(0)
+
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="job_{job_id}_selected_tiles.zip"'
             }
         )
 
@@ -317,7 +402,10 @@ async def get_page_tiles_endpoint(job_id: int, page_num: int):
     """
     Get tiles for a specific page.
     Returns tile grid with presigned S3 URLs for each tile.
+    Includes isBlank flag from tile metadata.
     """
+    import json
+
     result = get_page_tiles(job_id, page_num)
 
     if not result:
@@ -328,6 +416,20 @@ async def get_page_tiles_endpoint(job_id: int, page_num: int):
 
     # Generate presigned URLs for tiles
     s3_client = S3Client()
+
+    # Try to load tile metadata from S3 (includes is_blank)
+    metadata_key = f"output/{job_id}/tiles/page_{page_num}_metadata.json"
+    tile_metadata = {}
+    try:
+        metadata_bytes = s3_client.download_bytes(metadata_key)
+        metadata_list = json.loads(metadata_bytes.decode('utf-8'))
+        # Create lookup dict by row,col
+        for m in metadata_list:
+            tile_metadata[(m['row'], m['col'])] = m
+    except Exception:
+        # Metadata file doesn't exist (older jobs), continue without it
+        pass
+
     tiles_with_urls = []
 
     for tile in result['tiles']:
@@ -339,6 +441,10 @@ async def get_page_tiles_endpoint(job_id: int, page_num: int):
             # If tile doesn't exist, skip it
             continue
 
+        # Get is_blank from metadata if available
+        meta = tile_metadata.get((tile['row'], tile['col']), {})
+        is_blank = meta.get('is_blank', False)
+
         tiles_with_urls.append(
             TileInfo(
                 row=tile['row'],
@@ -346,6 +452,7 @@ async def get_page_tiles_endpoint(job_id: int, page_num: int):
                 url=url,
                 width=tile.get('width'),
                 height=tile.get('height'),
+                isBlank=is_blank,
             )
         )
 

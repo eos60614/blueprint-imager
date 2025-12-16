@@ -21,6 +21,11 @@ import type {
   TileGridResponse,
   PdfUrlResponse,
 } from '@/types/history';
+import type {
+  RoboflowUploadRequest,
+  RoboflowUploadResult,
+  RoboflowStatus,
+} from '@/types/roboflow';
 
 class ApiError extends Error {
   constructor(
@@ -206,6 +211,79 @@ export async function getPdfUrl(jobId: number): Promise<PdfUrlResponse> {
   });
 
   return handleResponse<PdfUrlResponse>(response);
+}
+
+// ============================================================
+// Roboflow API functions
+// ============================================================
+
+/**
+ * Upload tiles to Roboflow.
+ */
+export async function uploadTilesToRoboflow(
+  request: RoboflowUploadRequest
+): Promise<RoboflowUploadResult> {
+  const response = await fetch(`${config.apiUrl}/api/roboflow/upload`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  return handleResponse<RoboflowUploadResult>(response);
+}
+
+/**
+ * Check if Roboflow is configured.
+ */
+export async function getRoboflowStatus(): Promise<RoboflowStatus> {
+  const response = await fetch(`${config.apiUrl}/api/roboflow/status`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return handleResponse<RoboflowStatus>(response);
+}
+
+// ============================================================
+// Tile download API functions
+// ============================================================
+
+export interface DownloadTileSelection {
+  pageNum: number;
+  row: number;
+  col: number;
+}
+
+/**
+ * Download selected tiles as a ZIP file.
+ * Returns a blob that can be downloaded.
+ */
+export async function downloadSelectedTiles(
+  jobId: number,
+  tiles: DownloadTileSelection[]
+): Promise<Blob> {
+  const response = await fetch(`${config.apiUrl}/api/jobs/${jobId}/download-tiles`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ tiles }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new ApiError(
+      response.status,
+      errorData.error || 'Unknown error',
+      errorData.message || 'Failed to download tiles'
+    );
+  }
+
+  return response.blob();
 }
 
 export { ApiError };

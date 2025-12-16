@@ -318,6 +318,112 @@ test.describe('Browse History Feature', () => {
     });
   });
 
+  test.describe('Tile Download', () => {
+    test('should download selected tiles as ZIP', async ({ page }) => {
+      // Use existing job 41, page 47
+      await page.goto('/history/41/47');
+
+      // Wait for tiles to load
+      await expect(page.getByText('Page 47 Tiles')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/\d+ tiles?/)).toBeVisible({ timeout: 10000 });
+
+      // Click "Select Tiles" button to enter selection mode
+      const selectButton = page.getByRole('button', { name: 'Select Tiles' });
+      await selectButton.click();
+
+      // Button should change to "Cancel Selection"
+      await expect(page.getByRole('button', { name: 'Cancel Selection' })).toBeVisible();
+
+      // Select first tile by clicking on it (tiles have aspect-square class)
+      const firstTile = page.locator('.aspect-square.cursor-pointer').first();
+      await firstTile.click();
+
+      // Should show "1 selected" text
+      await expect(page.getByText('1 selected')).toBeVisible();
+
+      // Download button should now be visible with count
+      const downloadButton = page.getByRole('button', { name: /Download \(1\)/ });
+      await expect(downloadButton).toBeVisible();
+
+      // Set up download handler
+      const downloadPromise = page.waitForEvent('download');
+
+      // Click download
+      await downloadButton.click();
+
+      // Wait for download to complete
+      const download = await downloadPromise;
+
+      // Verify download filename pattern
+      expect(download.suggestedFilename()).toMatch(/job_41_page_47_tiles\.zip/);
+
+      // Save and verify file exists
+      const path = await download.path();
+      expect(path).toBeTruthy();
+    });
+
+    test('should allow selecting multiple tiles', async ({ page }) => {
+      await page.goto('/history/41/47');
+
+      await expect(page.getByText('Page 47 Tiles')).toBeVisible({ timeout: 10000 });
+
+      // Enter selection mode
+      await page.getByRole('button', { name: 'Select Tiles' }).click();
+
+      // Select first two tiles
+      const tiles = page.locator('.aspect-square.cursor-pointer');
+      await tiles.nth(0).click();
+      await tiles.nth(1).click();
+
+      // Should show "2 selected"
+      await expect(page.getByText('2 selected')).toBeVisible();
+
+      // Download button should show count of 2
+      await expect(page.getByRole('button', { name: /Download \(2\)/ })).toBeVisible();
+    });
+
+    test('should use Select All and Deselect All buttons', async ({ page }) => {
+      await page.goto('/history/41/47');
+
+      await expect(page.getByText('Page 47 Tiles')).toBeVisible({ timeout: 10000 });
+
+      // Enter selection mode
+      await page.getByRole('button', { name: 'Select Tiles' }).click();
+
+      // Click Select All (use exact: true to avoid matching "Deselect All")
+      await page.getByRole('button', { name: 'Select All', exact: true }).click();
+
+      // Should show all selected - get tile count from the page
+      const tileCountText = await page.getByText(/\d+ tiles?/).textContent();
+      const tileCount = parseInt(tileCountText?.match(/(\d+)/)?.[1] || '0');
+      await expect(page.getByText(`${tileCount} selected`)).toBeVisible();
+
+      // Click Deselect All
+      await page.getByRole('button', { name: 'Deselect All' }).click();
+
+      // Selected count should disappear (no tiles selected)
+      await expect(page.getByText(/\d+ selected/)).not.toBeVisible();
+    });
+
+    test('should clear selection when canceling selection mode', async ({ page }) => {
+      await page.goto('/history/41/47');
+
+      await expect(page.getByText('Page 47 Tiles')).toBeVisible({ timeout: 10000 });
+
+      // Enter selection mode and select a tile
+      await page.getByRole('button', { name: 'Select Tiles' }).click();
+      await page.locator('.aspect-square.cursor-pointer').first().click();
+      await expect(page.getByText('1 selected')).toBeVisible();
+
+      // Cancel selection mode
+      await page.getByRole('button', { name: 'Cancel Selection' }).click();
+
+      // Re-enter selection mode - should have no selection
+      await page.getByRole('button', { name: 'Select Tiles' }).click();
+      await expect(page.getByText(/\d+ selected/)).not.toBeVisible();
+    });
+  });
+
   test.describe('Browser Navigation', () => {
     test('should support browser back and forward navigation', async ({ page }) => {
       test.setTimeout(180000);
