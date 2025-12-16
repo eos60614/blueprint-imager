@@ -152,6 +152,8 @@ function getTileKey(row: number, col: number): string {
   return `${row}-${col}`;
 }
 
+const TILES_PER_PAGE = 50;
+
 export function TileGrid({
   tilesData,
   isLoading = false,
@@ -162,9 +164,25 @@ export function TileGrid({
   pageNum,
 }: TileGridProps) {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [hideBlankTiles, setHideBlankTiles] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const tiles = tilesData?.tiles || [];
+  const allTiles = tilesData?.tiles || [];
   const gridSize = tilesData?.gridSize || { rows: 0, cols: 0 };
+
+  // Filter tiles based on hideBlankTiles setting
+  const tiles = hideBlankTiles ? allTiles.filter((t) => !t.isBlank) : allTiles;
+
+  // Pagination
+  const totalPages = Math.ceil(tiles.length / TILES_PER_PAGE);
+  const startIndex = (currentPage - 1) * TILES_PER_PAGE;
+  const endIndex = startIndex + TILES_PER_PAGE;
+  const paginatedTiles = tiles.slice(startIndex, endIndex);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [hideBlankTiles]);
 
   const handleTileClick = useCallback((index: number) => {
     setPreviewIndex(index);
@@ -181,10 +199,10 @@ export function TileGrid({
   }, [previewIndex]);
 
   const goToNext = useCallback(() => {
-    if (previewIndex !== null && previewIndex < tiles.length - 1) {
+    if (previewIndex !== null && previewIndex < paginatedTiles.length - 1) {
       setPreviewIndex(previewIndex + 1);
     }
-  }, [previewIndex, tiles.length]);
+  }, [previewIndex, paginatedTiles.length]);
 
   const handleToggleSelect = useCallback(
     (row: number, col: number) => {
@@ -260,53 +278,76 @@ export function TileGrid({
   }
 
   // Count non-blank tiles for selection tracking
-  const nonBlankTiles = tiles.filter((t) => !t.isBlank);
-  const blankTileCount = tiles.length - nonBlankTiles.length;
+  const nonBlankTiles = allTiles.filter((t) => !t.isBlank);
+  const blankTileCount = allTiles.length - nonBlankTiles.length;
   const allSelected = nonBlankTiles.length > 0 && selectedTiles.size === nonBlankTiles.length;
   const someSelected = selectedTiles.size > 0 && selectedTiles.size < nonBlankTiles.length;
 
   return (
     <>
       {/* Summary and selection controls */}
-      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">
-            {tiles.length} tile{tiles.length !== 1 ? 's' : ''} ({gridSize.rows} rows x{' '}
-            {gridSize.cols} columns)
-            {blankTileCount > 0 && (
-              <span className="text-yellow-600 ml-1">
-                ({blankTileCount} blank)
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-500">
+              {allTiles.length} tile{allTiles.length !== 1 ? 's' : ''} ({gridSize.rows} rows x{' '}
+              {gridSize.cols} columns)
+              {blankTileCount > 0 && (
+                <span className="text-yellow-600 ml-1">
+                  ({blankTileCount} blank)
+                </span>
+              )}
+            </span>
+            {selectionMode && selectedTiles.size > 0 && (
+              <span className="text-sm font-medium text-blue-600">
+                {selectedTiles.size} selected
               </span>
             )}
-          </span>
-          {selectionMode && selectedTiles.size > 0 && (
-            <span className="text-sm font-medium text-blue-600">
-              {selectedTiles.size} selected
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {selectionMode ? (
-            <>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Hide blank toggle */}
+            {blankTileCount > 0 && (
               <button
-                onClick={handleSelectAll}
-                disabled={allSelected}
-                className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed"
+                onClick={() => setHideBlankTiles(!hideBlankTiles)}
+                className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                  hideBlankTiles
+                    ? 'bg-yellow-100 border-yellow-400 text-yellow-700'
+                    : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
+                }`}
               >
-                Select All
+                {hideBlankTiles ? 'Show Blank' : 'Hide Blank'}
               </button>
-              <button
-                onClick={handleDeselectAll}
-                disabled={selectedTiles.size === 0}
-                className="px-3 py-1 text-xs font-medium text-gray-600 hover:text-gray-800 disabled:text-gray-400 disabled:cursor-not-allowed"
-              >
-                Deselect All
-              </button>
-            </>
-          ) : (
-            <span className="text-xs text-gray-400">Click a tile to view full size</span>
-          )}
+            )}
+            {selectionMode ? (
+              <>
+                <button
+                  onClick={handleSelectAll}
+                  disabled={allSelected}
+                  className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={handleDeselectAll}
+                  disabled={selectedTiles.size === 0}
+                  className="px-3 py-1 text-xs font-medium text-gray-600 hover:text-gray-800 disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
+                  Deselect All
+                </button>
+              </>
+            ) : (
+              <span className="text-xs text-gray-400">Click a tile to view full size</span>
+            )}
+          </div>
         </div>
+
+        {/* Pagination info */}
+        {totalPages > 1 && (
+          <div className="text-sm text-gray-500">
+            Showing {startIndex + 1}-{Math.min(endIndex, tiles.length)} of {tiles.length} tiles
+            {hideBlankTiles && ` (${blankTileCount} blank hidden)`}
+          </div>
+        )}
       </div>
 
       {/* Tile grid */}
@@ -316,7 +357,7 @@ export function TileGrid({
           gridTemplateColumns: `repeat(${Math.min(gridSize.cols, 8)}, minmax(0, 1fr))`,
         }}
       >
-        {tiles.map((tile, index) => (
+        {paginatedTiles.map((tile, index) => (
           <LazyTile
             key={`${tile.row}-${tile.col}`}
             tile={tile}
@@ -329,15 +370,52 @@ export function TileGrid({
         ))}
       </div>
 
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            First
+          </button>
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <span className="px-4 py-1.5 text-sm text-gray-600">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Last
+          </button>
+        </div>
+      )}
+
       {/* Preview modal */}
-      {previewIndex !== null && tiles[previewIndex] && (
+      {previewIndex !== null && paginatedTiles[previewIndex] && (
         <TilePreview
-          tile={tiles[previewIndex]}
+          tile={paginatedTiles[previewIndex]}
           onClose={closePreview}
           onPrevious={goToPrevious}
           onNext={goToNext}
           hasPrevious={previewIndex > 0}
-          hasNext={previewIndex < tiles.length - 1}
+          hasNext={previewIndex < paginatedTiles.length - 1}
         />
       )}
     </>

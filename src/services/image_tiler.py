@@ -9,7 +9,7 @@ Image.MAX_IMAGE_PIXELS = 500000000  # 500 million pixels
 
 
 class ImageTiler:
-    def __init__(self, tile_size: int = 1920, overlap: int = 250, blank_threshold: float = 0.80):
+    def __init__(self, tile_size: int = 1920, overlap: int = 250, blank_threshold: float = 0.95):
         self.tile_size = tile_size
         self.overlap = overlap
         self.stride = tile_size - overlap  # 1670
