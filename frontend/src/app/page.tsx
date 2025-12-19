@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { UploadProvider, useUpload } from '@/contexts/UploadContext';
 import { SelectionProvider, useSelection } from '@/contexts/SelectionContext';
 import { ProcessingProvider, useProcessing } from '@/contexts/ProcessingContext';
+import { AreaSelectionProvider, useAreaSelection } from '@/contexts/AreaSelectionContext';
 import { FileUpload } from '@/components/FileUpload';
 import { PageSelector } from '@/components/PageSelector';
 import { ThumbnailGrid } from '@/components/ThumbnailGrid';
@@ -13,12 +14,15 @@ import { DownloadButton } from '@/components/DownloadButton';
 import { Instructions } from '@/components/Instructions';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { ConversionSettings } from '@/components/ConversionSettings';
+import { PagePreviewWithSelector } from '@/components/PagePreviewWithSelector';
+import { TileEstimateDisplay } from '@/components/TileEstimateDisplay';
 import { DEFAULT_CONVERSION_SETTINGS } from '@/types/api';
-import type { ConversionSettings as ConversionSettingsType } from '@/types/api';
+import type { ConversionSettings as ConversionSettingsType, AreaSelectionInput } from '@/types/api';
 
 function ProcessingSection() {
   const { documentState, uploadState } = useUpload();
   const { selectionState } = useSelection();
+  const { getAllSelections } = useAreaSelection();
   const { processingState, startProcessing, reset } = useProcessing();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [conversionSettings, setConversionSettings] = useState<ConversionSettingsType>(
@@ -34,6 +38,17 @@ function ProcessingSection() {
 
   const handleConfirm = () => {
     setShowConfirmModal(false);
+
+    // Convert area selections to API format
+    const areaSelections = getAllSelections();
+    const areaSelectionsInput: AreaSelectionInput[] = areaSelections.map((sel) => ({
+      pageNum: sel.pageNum,
+      x: sel.x,
+      y: sel.y,
+      width: sel.width,
+      height: sel.height,
+    }));
+
     startProcessing(
       documentState.uploadId,
       selectionState.selectedPages,
@@ -41,7 +56,8 @@ function ProcessingSection() {
       {
         fileName: uploadState.fileName || 'document.pdf',
         pageCount: documentState.pageCount,
-      }
+      },
+      areaSelectionsInput.length > 0 ? areaSelectionsInput : undefined
     );
   };
 
@@ -101,6 +117,15 @@ function ProcessingSection() {
               settings={conversionSettings}
               onChange={setConversionSettings}
               disabled={isSubmitting}
+            />
+          )}
+
+          {/* Tile estimate display */}
+          {!isProcessing && !isComplete && selectionState.selectedPages.length > 0 && (
+            <TileEstimateDisplay
+              selectedPages={selectionState.selectedPages}
+              areaSelections={getAllSelections()}
+              settings={conversionSettings}
             />
           )}
 
@@ -212,6 +237,109 @@ function PageSelectionSection() {
   );
 }
 
+function AreaSelectionSection() {
+  const { uploadState } = useUpload();
+  const { selectionState } = useSelection();
+  const { getAllSelections } = useAreaSelection();
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [currentStartPage, setCurrentStartPage] = useState(0);
+
+  // Create blob URL for PDF viewing
+  useEffect(() => {
+    if (uploadState.file) {
+      const url = URL.createObjectURL(uploadState.file);
+      setPdfUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [uploadState.file]);
+
+  // Reset pagination when selected pages change
+  useEffect(() => {
+    setCurrentStartPage(0);
+  }, [selectionState.selectedPages.length]);
+
+  // Don't show if no pages selected
+  if (selectionState.selectedPages.length === 0 || !pdfUrl) {
+    return null;
+  }
+
+  const selectedPages = [...selectionState.selectedPages].sort((a, b) => a - b);
+  const totalSelected = selectedPages.length;
+  const pagesPerView = 2;
+  const totalViews = Math.ceil(totalSelected / pagesPerView);
+  const currentViewPages = selectedPages.slice(
+    currentStartPage,
+    currentStartPage + pagesPerView
+  );
+  const areaSelections = getAllSelections();
+  const pagesWithSelections = new Set(areaSelections.map(s => s.pageNum));
+
+  const handlePrevious = () => {
+    setCurrentStartPage(Math.max(0, currentStartPage - pagesPerView));
+  };
+
+  const handleNext = () => {
+    setCurrentStartPage(
+      Math.min(totalSelected - pagesPerView, currentStartPage + pagesPerView)
+    );
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+          Step 2.5: Select Area (Optional)
+        </h2>
+        {areaSelections.length > 0 && (
+          <span className="text-sm text-blue-600">
+            {pagesWithSelections.size} page{pagesWithSelections.size !== 1 ? 's' : ''} with area selection
+          </span>
+        )}
+      </div>
+
+      <p className="text-sm text-gray-500 mb-4">
+        Draw a rectangle on any page to only tile that area. Leave unselected for full page tiling.
+      </p>
+
+      {/* Page preview grid */}
+      <div className="flex flex-wrap gap-4 justify-center mb-4">
+        {currentViewPages.map((pageNum) => (
+          <PagePreviewWithSelector
+            key={pageNum}
+            pdfUrl={pdfUrl}
+            pageNumber={pageNum}
+            maxWidth={450}
+            maxHeight={600}
+          />
+        ))}
+      </div>
+
+      {/* Pagination controls */}
+      {totalViews > 1 && (
+        <div className="flex items-center justify-center gap-4 mt-4">
+          <button
+            onClick={handlePrevious}
+            disabled={currentStartPage === 0}
+            className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-600">
+            Pages {currentStartPage + 1}-{Math.min(currentStartPage + pagesPerView, totalSelected)} of {totalSelected} selected
+          </span>
+          <button
+            onClick={handleNext}
+            disabled={currentStartPage + pagesPerView >= totalSelected}
+            className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UploadPage() {
   const { uploadState, documentState, uploadFile, clearError } = useUpload();
   const [showInstructions, setShowInstructions] = useState(true);
@@ -269,13 +397,16 @@ function UploadPage() {
         />
       </div>
 
-      {/* Step 2: Page Selection & Step 3: Processing */}
+      {/* Step 2: Page Selection, Step 2.5: Area Selection, Step 3: Processing */}
       {documentState && (
         <SelectionProvider pageCount={documentState.pageCount}>
-          <ProcessingProvider>
-            <PageSelectionSection />
-            <ProcessingSection />
-          </ProcessingProvider>
+          <AreaSelectionProvider>
+            <ProcessingProvider>
+              <PageSelectionSection />
+              <AreaSelectionSection />
+              <ProcessingSection />
+            </ProcessingProvider>
+          </AreaSelectionProvider>
         </SelectionProvider>
       )}
     </div>

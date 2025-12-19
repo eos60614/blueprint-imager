@@ -38,6 +38,15 @@ export const DEFAULT_CONVERSION_SETTINGS: ConversionSettings = {
   overlap: 250,
 };
 
+// Area selection for convert request
+export interface AreaSelectionInput {
+  pageNum: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 // Convert endpoints
 export interface ConvertPagesRequest {
   uploadId: number;
@@ -45,6 +54,8 @@ export interface ConvertPagesRequest {
   dpi?: number;
   tileSize?: number;
   overlap?: number;
+  // Optional area selections per page
+  areaSelections?: AreaSelectionInput[];
 }
 
 export interface ConvertPagesResponse {

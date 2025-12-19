@@ -26,6 +26,10 @@ import type {
   RoboflowUploadResult,
   RoboflowStatus,
 } from '@/types/roboflow';
+import type {
+  TileEstimateRequest,
+  TileEstimateResponse,
+} from '@/types/area-selection';
 
 class ApiError extends Error {
   constructor(
@@ -284,6 +288,27 @@ export async function downloadSelectedTiles(
   }
 
   return response.blob();
+}
+
+// ============================================================
+// Area Selection / Tile Estimate API functions
+// ============================================================
+
+/**
+ * Estimate tile count for a page or area selection.
+ */
+export async function estimateTiles(
+  request: TileEstimateRequest
+): Promise<TileEstimateResponse> {
+  const response = await fetch(`${config.apiUrl}/api/convert/estimate-tiles`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  return handleResponse<TileEstimateResponse>(response);
 }
 
 export { ApiError };

@@ -12,7 +12,7 @@ import { convertPages } from '@/lib/api-client';
 import { useJobStatus } from '@/hooks/useJobStatus';
 import type { ProcessingState, ProcessingStatus } from '@/types/state';
 import { initialProcessingState } from '@/types/state';
-import type { ConversionSettings } from '@/types/api';
+import type { ConversionSettings, AreaSelectionInput } from '@/types/api';
 import { addHistoryEntry, updateHistoryEntryStatus } from '@/lib/history-storage';
 import type { CreateHistoryEntryInput } from '@/types/history';
 
@@ -27,7 +27,8 @@ interface ProcessingContextValue {
     uploadId: number,
     selectedPages: number[],
     settings?: ConversionSettings,
-    historyParams?: HistoryEntryParams
+    historyParams?: HistoryEntryParams,
+    areaSelections?: AreaSelectionInput[]
   ) => Promise<void>;
   reset: () => void;
 }
@@ -92,7 +93,8 @@ export function ProcessingProvider({ children }: ProcessingProviderProps) {
       uploadId: number,
       selectedPages: number[],
       settings?: ConversionSettings,
-      historyParams?: HistoryEntryParams
+      historyParams?: HistoryEntryParams,
+      areaSelections?: AreaSelectionInput[]
     ) => {
       setState((prev) => ({
         ...prev,
@@ -108,6 +110,10 @@ export function ProcessingProvider({ children }: ProcessingProviderProps) {
             dpi: settings.dpi,
             tileSize: settings.tileSize,
             overlap: settings.overlap,
+          }),
+          // Include area selections if provided
+          ...(areaSelections && areaSelections.length > 0 && {
+            areaSelections,
           }),
         });
 
