@@ -56,3 +56,7 @@ frontend/.env.*.local
 !frontend/.env.local.example
 frontend/test-results/
 frontend/playwright-report/
+
+# Docker
+data/
+tile_storage/

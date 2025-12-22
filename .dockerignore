@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+env/
+venv/
+ENV/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+frontend/
+node_modules/
+*.log
+data/
+procore_output/
+test_*/
+drawing_sets*/
+specs/
+.specify/
+*.md
+!requirements.txt
+
+# Large files
+*.pdf
+*.zip
+*.png

@@ -13,6 +13,7 @@ from datetime import datetime
 
 from ..services import PDFProcessor, ImageTiler, ProcoreClient
 from ..models import Drawing, Image as ImageModel, Job
+from ..config import config
 from .upload import router as upload_router
 from .convert import router as convert_router
 from .jobs import router as jobs_router
@@ -28,13 +29,10 @@ app.include_router(jobs_router)
 app.include_router(roboflow_router)
 app.include_router(tiles_router)
 
-# Configure CORS for frontend
+# Configure CORS for frontend (loaded from CORS_ORIGINS env var)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Local frontend dev
-        "https://*.vercel.app",   # Vercel preview deployments
-    ],
+    allow_origins=config.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: blueprint-imager-api
+    expose:
+      - "3010"
+    environment:
+      # PostgreSQL Database
+      - DATABASE_HOST=${DATABASE_HOST}
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
+      - DATABASE_NAME=${DATABASE_NAME}
+      - DATABASE_USER=${DATABASE_USER}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+
+      # AWS S3
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-2}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-dwg-sets}
+
+      # CORS - Vercel frontend + trycloudflare (update with your actual Vercel URL)
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,https://*.vercel.app,https://*.trycloudflare.com}
+
+      # PDF Processing
+      - PDF_DPI=${PDF_DPI:-600}
+      - TILE_SIZE=${TILE_SIZE:-1920}
+      - TILE_OVERLAP=${TILE_OVERLAP:-250}
+
+      # Local storage
+      - LOCAL_TILE_STORAGE_PATH=/var/data/tiles
+      - TILE_TTL_HOURS=${TILE_TTL_HOURS:-24}
+
+      # Roboflow (optional)
+      - ROBOFLOW_API_KEY=${ROBOFLOW_API_KEY:-}
+      - ROBOFLOW_PROJECT_NAME=${ROBOFLOW_PROJECT_NAME:-}
+
+      # Procore (optional)
+      - PROCORE_CLIENT_ID=${PROCORE_CLIENT_ID:-}
+      - PROCORE_CLIENT_SECRET=${PROCORE_CLIENT_SECRET:-}
+      - PROCORE_API_BASE_URL=${PROCORE_API_BASE_URL:-https://sandbox.procore.com}
+      - PROCORE_AUTH_BASE_URL=${PROCORE_AUTH_BASE_URL:-https://login-sandbox.procore.com}
+      - PROCORE_COMPANY_ID=${PROCORE_COMPANY_ID:-}
+    volumes:
+      # Persist SQLite database
+      - ./data/db:/app/data
+      # Persist tile storage
+      - ./data/tiles:/var/data/tiles
+      # Persist Procore output
+      - ./data/procore_output:/app/procore_output
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    image: nginx:alpine
+    container_name: blueprint-imager-nginx
+    ports:
+      - "3010:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # Free HTTPS tunnel (no account needed)
+  # Gives you a random URL like https://xxx-yyy-zzz.trycloudflare.com
+  # Check logs for URL: docker-compose logs tunnel
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: blueprint-imager-tunnel
+    command: tunnel --no-autoupdate --url http://nginx:80
+    depends_on:
+      - nginx
+    restart: unless-stopped
