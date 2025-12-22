@@ -232,5 +232,64 @@ def serve(host, port, reload):
     )
 
 
+@cli.command()
+@click.option('--dry-run', is_flag=True, help='Show what would be deleted without deleting')
+@click.option('--ttl-hours', default=None, type=int, help='Override TTL hours (default from config)')
+def cleanup_tiles(dry_run, ttl_hours):
+    """Clean up tile directories older than TTL (default 24 hours).
+
+    This command should be run periodically (e.g., via cron) to clean up
+    old tile files from local storage.
+
+    Example cron entry (run every hour):
+        0 * * * * cd /path/to/project && python -m src.cli.main cleanup-tiles
+    """
+    import shutil
+    from datetime import datetime, timedelta
+
+    ttl = ttl_hours if ttl_hours is not None else config.TILE_TTL_HOURS
+    storage_path = Path(config.LOCAL_TILE_STORAGE_PATH)
+
+    if not storage_path.exists():
+        click.echo(f"Tile storage path does not exist: {storage_path}")
+        return
+
+    cutoff_time = datetime.now() - timedelta(hours=ttl)
+    deleted_count = 0
+    total_size = 0
+
+    click.echo(f"Scanning for tiles older than {ttl} hours...")
+    click.echo(f"Storage path: {storage_path}")
+    click.echo(f"Cutoff time: {cutoff_time}")
+
+    # Each subdirectory is a job_id
+    for job_dir in storage_path.iterdir():
+        if not job_dir.is_dir():
+            continue
+
+        # Check the modification time of the directory
+        dir_mtime = datetime.fromtimestamp(job_dir.stat().st_mtime)
+
+        if dir_mtime < cutoff_time:
+            # Calculate directory size
+            dir_size = sum(f.stat().st_size for f in job_dir.rglob('*') if f.is_file())
+            total_size += dir_size
+
+            if dry_run:
+                click.echo(f"[DRY RUN] Would delete: {job_dir} (modified: {dir_mtime}, size: {dir_size / 1024 / 1024:.2f} MB)")
+            else:
+                try:
+                    shutil.rmtree(job_dir)
+                    click.echo(f"Deleted: {job_dir} (modified: {dir_mtime}, size: {dir_size / 1024 / 1024:.2f} MB)")
+                    deleted_count += 1
+                except Exception as e:
+                    click.echo(f"Failed to delete {job_dir}: {e}", err=True)
+
+    if dry_run:
+        click.echo(f"\n[DRY RUN] Would delete {deleted_count} directories, freeing {total_size / 1024 / 1024:.2f} MB")
+    else:
+        click.echo(f"\nCleanup complete: deleted {deleted_count} directories, freed {total_size / 1024 / 1024:.2f} MB")
+
+
 if __name__ == '__main__':
     cli()

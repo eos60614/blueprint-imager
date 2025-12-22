@@ -11,6 +11,7 @@ import io
 import zipfile
 
 from ..db import get_db
+from ..config import config
 from ..services import S3Client
 from ..services.job_service import (
     get_job_progress,
@@ -152,7 +153,10 @@ async def download_job_results(job_id: int):
     """
     Download job results as a ZIP file.
     Only available when job status is "completed".
+    Tiles are served from local storage.
     """
+    from pathlib import Path
+
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -172,14 +176,20 @@ async def download_job_results(job_id: int):
             detail={"error": "Not ready", "message": "Job is not yet completed"}
         )
 
-    # Get tiles from S3 and create ZIP
-    s3_client = S3Client()
-    prefix = f"output/{job_id}/tiles/"
+    # Get tiles from local storage and create ZIP
+    local_tiles_dir = Path(config.LOCAL_TILE_STORAGE_PATH) / str(job_id) / "tiles"
 
     try:
-        objects = s3_client.list_objects(prefix)
+        if not local_tiles_dir.exists():
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "No tiles", "message": "No tiles found for this job"}
+            )
 
-        if not objects:
+        # Get all PNG files (exclude metadata JSON)
+        tile_files = list(local_tiles_dir.glob("*.png"))
+
+        if not tile_files:
             raise HTTPException(
                 status_code=404,
                 detail={"error": "No tiles", "message": "No tiles found for this job"}
@@ -188,19 +198,13 @@ async def download_job_results(job_id: int):
         # Create ZIP in memory
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            for obj in objects:
-                key = obj['Key']
-                filename = key.replace(prefix, '')
-
-                # Download file content
-                response = s3_client.s3.get_object(
-                    Bucket=s3_client.bucket_name,
-                    Key=key
-                )
-                file_content = response['Body'].read()
+            for tile_path in tile_files:
+                # Read file content
+                with open(tile_path, 'rb') as f:
+                    file_content = f.read()
 
                 # Add to ZIP
-                zip_file.writestr(f"tiles/{filename}", file_content)
+                zip_file.writestr(f"tiles/{tile_path.name}", file_content)
 
         zip_buffer.seek(0)
 
@@ -212,6 +216,8 @@ async def download_job_results(job_id: int):
             }
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -224,7 +230,10 @@ async def download_selected_tiles(job_id: int, request: DownloadTilesRequest):
     """
     Download selected tiles as a ZIP file.
     Accepts a list of tile selections (pageNum, row, col).
+    Tiles are served from local storage.
     """
+    from pathlib import Path
+
     if not request.tiles:
         raise HTTPException(
             status_code=400,
@@ -250,31 +259,28 @@ async def download_selected_tiles(job_id: int, request: DownloadTilesRequest):
             detail={"error": "Not ready", "message": "Job is not yet completed"}
         )
 
-    # Get selected tiles from S3 and create ZIP
-    s3_client = S3Client()
+    # Get selected tiles from local storage and create ZIP
+    local_tiles_dir = Path(config.LOCAL_TILE_STORAGE_PATH) / str(job_id) / "tiles"
 
     try:
         # Create ZIP in memory
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for tile in request.tiles:
-                # S3 key pattern: output/{job_id}/tiles/page_{page_num}_tile_{row}_{col}.png
-                s3_key = f"output/{job_id}/tiles/page_{tile.pageNum}_tile_{tile.row}_{tile.col}.png"
+                # Local path pattern: {job_id}/tiles/page_{page_num}_tile_{row}_{col}.png
                 filename = f"page_{tile.pageNum}_tile_{tile.row}_{tile.col}.png"
+                tile_path = local_tiles_dir / filename
 
-                try:
-                    # Download file content
-                    response = s3_client.s3.get_object(
-                        Bucket=s3_client.bucket_name,
-                        Key=s3_key
-                    )
-                    file_content = response['Body'].read()
-
-                    # Add to ZIP
-                    zip_file.writestr(f"tiles/{filename}", file_content)
-                except Exception:
+                if not tile_path.exists():
                     # Skip tiles that don't exist
                     continue
+
+                # Read file content
+                with open(tile_path, 'rb') as f:
+                    file_content = f.read()
+
+                # Add to ZIP
+                zip_file.writestr(f"tiles/{filename}", file_content)
 
         zip_buffer.seek(0)
 
@@ -401,11 +407,13 @@ async def get_job_pages_endpoint(job_id: int):
 async def get_page_tiles_endpoint(job_id: int, page_num: int):
     """
     Get tiles for a specific page.
-    Returns tile grid with presigned S3 URLs for each tile.
-    Includes isBlank flag from tile metadata.
+    Returns tile grid with local API URLs for each tile.
+    Reads tile positions from metadata file to support area selection.
     """
     import json
+    from pathlib import Path
 
+    # Verify job and page exist
     result = get_page_tiles(job_id, page_num)
 
     if not result:
@@ -414,56 +422,91 @@ async def get_page_tiles_endpoint(job_id: int, page_num: int):
             detail={"error": "Not found", "message": f"Job {job_id} page {page_num} not found"}
         )
 
-    # Generate presigned URLs for tiles
-    s3_client = S3Client()
-
-    # Try to load tile metadata from S3 (includes is_blank)
-    metadata_key = f"output/{job_id}/tiles/page_{page_num}_metadata.json"
-    tile_metadata = {}
-    try:
-        metadata_bytes = s3_client.download_bytes(metadata_key)
-        metadata_list = json.loads(metadata_bytes.decode('utf-8'))
-        # Create lookup dict by row,col
-        for m in metadata_list:
-            tile_metadata[(m['row'], m['col'])] = m
-    except Exception:
-        # Metadata file doesn't exist (older jobs), continue without it
-        pass
+    # Load tile metadata from local storage - this has the actual tile positions
+    local_tiles_dir = Path(config.LOCAL_TILE_STORAGE_PATH) / str(job_id) / "tiles"
+    metadata_path = local_tiles_dir / f"page_{page_num}_metadata.json"
 
     tiles_with_urls = []
+    min_row, max_row = float('inf'), 0
+    min_col, max_col = float('inf'), 0
 
-    for tile in result['tiles']:
-        # S3 key pattern: output/{job_id}/tiles/page_{page_num}_tile_{row}_{col}.png
-        s3_key = f"output/{job_id}/tiles/page_{page_num}_tile_{tile['row']}_{tile['col']}.png"
-        try:
-            url = s3_client.generate_presigned_download_url(s3_key, expires_in=3600)
-        except Exception:
-            # If tile doesn't exist, skip it
-            continue
+    try:
+        with open(metadata_path, 'r') as f:
+            metadata_list = json.load(f)
 
-        # Get is_blank from metadata if available
-        meta = tile_metadata.get((tile['row'], tile['col']), {})
-        is_blank = meta.get('is_blank', False)
+        # Use metadata as the source of truth for tile positions
+        for meta in metadata_list:
+            row = meta['row']
+            col = meta['col']
 
-        tiles_with_urls.append(
-            TileInfo(
-                row=tile['row'],
-                col=tile['col'],
-                url=url,
-                width=tile.get('width'),
-                height=tile.get('height'),
-                isBlank=is_blank,
+            # Track grid bounds
+            min_row = min(min_row, row)
+            max_row = max(max_row, row)
+            min_col = min(min_col, col)
+            max_col = max(max_col, col)
+
+            # Local tile path
+            filename = f"page_{page_num}_tile_{row}_{col}.png"
+            tile_path = local_tiles_dir / filename
+
+            if not tile_path.exists():
+                continue
+
+            # Generate local API URL for tile
+            url = f"/api/tiles/{job_id}/{filename}"
+
+            tiles_with_urls.append(
+                TileInfo(
+                    row=row,
+                    col=col,
+                    url=url,
+                    width=meta.get('width'),
+                    height=meta.get('height'),
+                    isBlank=meta.get('is_blank', False),
+                )
             )
-        )
+
+        # Calculate actual grid size from metadata
+        if tiles_with_urls:
+            grid_rows = max_row - min_row + 1
+            grid_cols = max_col - min_col + 1
+        else:
+            grid_rows = result['gridSize']['rows']
+            grid_cols = result['gridSize']['cols']
+
+    except FileNotFoundError:
+        # Metadata file doesn't exist (older jobs), fall back to calculated positions
+        for tile in result['tiles']:
+            filename = f"page_{page_num}_tile_{tile['row']}_{tile['col']}.png"
+            tile_path = local_tiles_dir / filename
+
+            if not tile_path.exists():
+                continue
+
+            url = f"/api/tiles/{job_id}/{filename}"
+
+            tiles_with_urls.append(
+                TileInfo(
+                    row=tile['row'],
+                    col=tile['col'],
+                    url=url,
+                    width=tile.get('width'),
+                    height=tile.get('height'),
+                    isBlank=False,
+                )
+            )
+
+        grid_rows = result['gridSize']['rows']
+        grid_cols = result['gridSize']['cols']
 
     return TileGridResponse(
         jobId=result['jobId'],
         pageNumber=result['pageNumber'],
         tiles=tiles_with_urls,
-        totalTiles=result['totalTiles'],
+        totalTiles=len(tiles_with_urls),
         gridSize=GridSize(
-            rows=result['gridSize']['rows'],
-            cols=result['gridSize']['cols'],
+            rows=grid_rows,
+            cols=grid_cols,
         ),
     )
 

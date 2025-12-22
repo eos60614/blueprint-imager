@@ -19,8 +19,8 @@ const DPI_PRESETS = [
 
 const TILE_SIZE_PRESETS = [
   { label: '640 px', value: 640 },
-  { label: '1280 px', value: 1280 },
-  { label: '1920 px (Default)', value: 1920 },
+  { label: '1024 px (Default)', value: 1024 },
+  { label: '1920 px', value: 1920 },
   { label: '2560 px', value: 2560 },
 ];
 

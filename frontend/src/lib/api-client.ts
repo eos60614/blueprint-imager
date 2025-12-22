@@ -200,7 +200,16 @@ export async function getPageTiles(
     }
   );
 
-  return handleResponse<TileGridResponse>(response);
+  const data = await handleResponse<TileGridResponse>(response);
+
+  // Transform relative tile URLs to absolute URLs pointing to the backend
+  return {
+    ...data,
+    tiles: data.tiles.map((tile) => ({
+      ...tile,
+      url: `${config.apiUrl}${tile.url}`,
+    })),
+  };
 }
 
 /**

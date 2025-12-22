@@ -17,6 +17,7 @@ from .upload import router as upload_router
 from .convert import router as convert_router
 from .jobs import router as jobs_router
 from .roboflow import router as roboflow_router
+from .tiles import router as tiles_router
 
 app = FastAPI(title="Blueprint Imager API", version="2.0.0")
 
@@ -25,6 +26,7 @@ app.include_router(upload_router)
 app.include_router(convert_router)
 app.include_router(jobs_router)
 app.include_router(roboflow_router)
+app.include_router(tiles_router)
 
 # Configure CORS for frontend
 app.add_middleware(

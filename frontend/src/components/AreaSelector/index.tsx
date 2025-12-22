@@ -169,7 +169,13 @@ export function AreaSelector({
   };
 
   return (
-    <div className="relative">
+    <div
+      className="absolute inset-0"
+      style={{
+        width: pageDimensions.displayWidth,
+        height: pageDimensions.displayHeight,
+      }}
+    >
       <canvas
         ref={canvasRef}
         className={`absolute inset-0 ${disabled ? 'cursor-not-allowed' : 'cursor-crosshair'}`}

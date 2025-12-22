@@ -34,7 +34,7 @@ export interface ConversionSettings {
 
 export const DEFAULT_CONVERSION_SETTINGS: ConversionSettings = {
   dpi: 600,
-  tileSize: 1920,
+  tileSize: 1024,
   overlap: 250,
 };
 

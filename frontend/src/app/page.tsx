@@ -15,7 +15,6 @@ import { Instructions } from '@/components/Instructions';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { ConversionSettings } from '@/components/ConversionSettings';
 import { PagePreviewWithSelector } from '@/components/PagePreviewWithSelector';
-import { TileEstimateDisplay } from '@/components/TileEstimateDisplay';
 import { DEFAULT_CONVERSION_SETTINGS } from '@/types/api';
 import type { ConversionSettings as ConversionSettingsType, AreaSelectionInput } from '@/types/api';
 
@@ -117,15 +116,6 @@ function ProcessingSection() {
               settings={conversionSettings}
               onChange={setConversionSettings}
               disabled={isSubmitting}
-            />
-          )}
-
-          {/* Tile estimate display */}
-          {!isProcessing && !isComplete && selectionState.selectedPages.length > 0 && (
-            <TileEstimateDisplay
-              selectedPages={selectionState.selectedPages}
-              areaSelections={getAllSelections()}
-              settings={conversionSettings}
             />
           )}
 

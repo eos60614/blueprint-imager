@@ -50,10 +50,6 @@ function LazyTile({ tile, onClick, selectionMode, isSelected, onToggleSelect, is
   }, []);
 
   const handleClick = () => {
-    // Don't allow selecting blank tiles in selection mode
-    if (selectionMode && isBlank) {
-      return;
-    }
     if (selectionMode && onToggleSelect) {
       onToggleSelect();
     } else {
@@ -64,9 +60,9 @@ function LazyTile({ tile, onClick, selectionMode, isSelected, onToggleSelect, is
   return (
     <div
       ref={imgRef}
-      className={`relative aspect-square bg-gray-100 rounded-lg overflow-hidden transition-all ${
-        isBlank ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:shadow-lg'
-      } ${selectionMode && isSelected && !isBlank ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+      className={`relative aspect-square bg-gray-100 rounded-lg overflow-hidden transition-all cursor-pointer hover:shadow-lg ${
+        selectionMode && isSelected ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+      }`}
       onClick={handleClick}
     >
       {isVisible && (
@@ -109,8 +105,8 @@ function LazyTile({ tile, onClick, selectionMode, isSelected, onToggleSelect, is
         </>
       )}
 
-      {/* Selection checkbox - don't show for blank tiles */}
-      {selectionMode && !isBlank && (
+      {/* Selection checkbox */}
+      {selectionMode && (
         <div className="absolute top-1 left-1">
           <div
             className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
@@ -221,9 +217,8 @@ export function TileGrid({
 
   const handleSelectAll = useCallback(() => {
     if (!onSelectionChange) return;
-    // Only select non-blank tiles
     const allKeys = new Set(
-      tiles.filter((tile) => !tile.isBlank).map((tile) => getTileKey(tile.row, tile.col))
+      tiles.map((tile) => getTileKey(tile.row, tile.col))
     );
     onSelectionChange(allKeys);
   }, [tiles, onSelectionChange]);
@@ -277,11 +272,10 @@ export function TileGrid({
     );
   }
 
-  // Count non-blank tiles for selection tracking
-  const nonBlankTiles = allTiles.filter((t) => !t.isBlank);
-  const blankTileCount = allTiles.length - nonBlankTiles.length;
-  const allSelected = nonBlankTiles.length > 0 && selectedTiles.size === nonBlankTiles.length;
-  const someSelected = selectedTiles.size > 0 && selectedTiles.size < nonBlankTiles.length;
+  // Count tiles for selection tracking
+  const blankTileCount = allTiles.filter((t) => t.isBlank).length;
+  const allSelected = tiles.length > 0 && selectedTiles.size === tiles.length;
+  const someSelected = selectedTiles.size > 0 && selectedTiles.size < tiles.length;
 
   return (
     <>

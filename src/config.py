@@ -59,5 +59,9 @@ class Config:
     ROBOFLOW_API_KEY: str = os.environ.get('ROBOFLOW_API_KEY', '')
     ROBOFLOW_PROJECT_NAME: str = os.environ.get('ROBOFLOW_PROJECT_NAME', '')
 
+    # Local Tile Storage
+    LOCAL_TILE_STORAGE_PATH: str = os.environ.get('LOCAL_TILE_STORAGE_PATH', '/var/data/tiles')
+    TILE_TTL_HOURS: int = int(os.environ.get('TILE_TTL_HOURS', '24'))
+
 
 config = Config()
