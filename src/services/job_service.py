@@ -3,9 +3,15 @@ Job service for managing conversion jobs from the upload frontend.
 """
 
 import json
+import logging
+import tempfile
+from pathlib import Path
 from typing import List, Optional
 
 from ..db import get_db
+from ..config import config
+
+logger = logging.getLogger(__name__)
 
 
 def create_upload_job(
@@ -438,3 +444,224 @@ def get_page_tiles(job_id: int, page_num: int) -> Optional[dict]:
             'cols': cols,
         },
     }
+
+
+# ============================================================
+# Procore Drawing Processing (T030, T031)
+# ============================================================
+
+def create_procore_job(
+    drawing_ids: List[int],
+    s3_keys: List[str],
+    dpi: int = 600,
+    tile_size: int = 1920,
+    overlap: int = 250,
+    no_tiles: bool = False
+) -> int:
+    """
+    Create a new conversion job for Procore drawings.
+
+    Args:
+        drawing_ids: List of Procore drawing IDs.
+        s3_keys: List of S3 keys for the drawing files.
+        dpi: DPI for PDF conversion.
+        tile_size: Size of output tiles.
+        overlap: Overlap between tiles.
+        no_tiles: If True, output single images instead of tiles.
+
+    Returns:
+        Job ID.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Store settings including no_tiles flag in procore_s3_keys JSON
+        job_settings = {
+            's3_keys': s3_keys,
+            'no_tiles': no_tiles
+        }
+
+        # Create job with procore source
+        cursor.execute('''
+            INSERT INTO jobs (
+                project_id, status, source, total_pages, processed_pages,
+                dpi, tile_size, overlap, procore_drawing_ids, procore_s3_keys
+            )
+            VALUES ('procore', 'processing', 'procore', %s, 0, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (
+            len(drawing_ids),
+            dpi,
+            tile_size,
+            overlap,
+            json.dumps(drawing_ids),
+            json.dumps(job_settings)
+        ))
+
+        job_id = cursor.fetchone()[0]
+
+        # Create job_pages entries (one per drawing)
+        for idx, drawing_id in enumerate(drawing_ids):
+            cursor.execute('''
+                INSERT INTO job_pages (job_id, page_number, status)
+                VALUES (%s, %s, 'pending')
+            ''', (job_id, idx + 1))
+
+    logger.info(f"Created Procore job {job_id} with {len(drawing_ids)} drawings (no_tiles={no_tiles})")
+    return job_id
+
+
+def get_procore_job_data(job_id: int) -> Optional[dict]:
+    """
+    Get Procore-specific job data including drawing IDs and S3 keys.
+
+    Args:
+        job_id: Job ID.
+
+    Returns:
+        Dict with job data or None if not found.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, status, dpi, tile_size, overlap,
+                   procore_drawing_ids, procore_s3_keys
+            FROM jobs WHERE id = %s AND source = 'procore'
+        ''', (job_id,))
+
+        row = cursor.fetchone()
+
+    if not row:
+        return None
+
+    # Parse procore_s3_keys which may be a list (legacy) or dict (new format with settings)
+    s3_keys_data = json.loads(row[6]) if row[6] else []
+    if isinstance(s3_keys_data, dict):
+        s3_keys = s3_keys_data.get('s3_keys', [])
+        no_tiles = s3_keys_data.get('no_tiles', False)
+    else:
+        # Legacy format: just a list of s3_keys
+        s3_keys = s3_keys_data
+        no_tiles = False
+
+    return {
+        'job_id': row[0],
+        'status': row[1],
+        'dpi': row[2] or 600,
+        'tile_size': row[3] or 1920,
+        'overlap': row[4] or 250,
+        'drawing_ids': json.loads(row[5]) if row[5] else [],
+        's3_keys': s3_keys,
+        'no_tiles': no_tiles,
+    }
+
+
+def process_procore_drawings(job_id: int) -> None:
+    """
+    Background task to process Procore drawings through the tile pipeline.
+
+    Downloads PDFs from Procore S3 bucket, converts to images, optionally tiles them,
+    and stores output in local storage.
+
+    Args:
+        job_id: Job ID to process.
+    """
+    import shutil
+    from .s3_client import S3Client
+    from .pdf_processor import PDFProcessor
+    from .image_tiler import ImageTiler
+
+    logger.info(f"Starting Procore job {job_id}")
+
+    job_data = get_procore_job_data(job_id)
+    if not job_data:
+        logger.error(f"Procore job {job_id} not found")
+        return
+
+    drawing_ids = job_data['drawing_ids']
+    s3_keys = job_data['s3_keys']
+    dpi = job_data['dpi']
+    tile_size = job_data['tile_size']
+    overlap = job_data['overlap']
+    no_tiles = job_data['no_tiles']
+
+    # Initialize clients
+    procore_s3 = S3Client(bucket_name=config.PROCORE_S3_BUCKET)
+    processor = PDFProcessor(dpi=dpi)
+
+    # Only create tiler if we need tiles
+    tiler = None if no_tiles else ImageTiler(tile_size=tile_size, overlap=overlap)
+
+    # Output directory - use "images" for no_tiles mode, "tiles" otherwise
+    output_subdir = "images" if no_tiles else "tiles"
+    output_base = Path(config.LOCAL_TILE_STORAGE_PATH) / str(job_id) / output_subdir
+    output_base.mkdir(parents=True, exist_ok=True)
+
+    total_output = 0
+    processed_count = 0
+
+    try:
+        for idx, (drawing_id, s3_key) in enumerate(zip(drawing_ids, s3_keys)):
+            page_num = idx + 1
+            logger.info(f"Processing drawing {drawing_id} (page {page_num}/{len(drawing_ids)}) no_tiles={no_tiles}")
+
+            try:
+                # Update page status to processing
+                update_page_status(job_id, page_num, 'processing')
+
+                # Download PDF from Procore S3
+                with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
+                    procore_s3.download_file(s3_key, tmp_pdf.name)
+                    pdf_path = tmp_pdf.name
+
+                # Convert PDF to images
+                with tempfile.TemporaryDirectory() as images_dir:
+                    image_paths = processor.convert_to_images(pdf_path, images_dir)
+
+                    page_output_count = 0
+
+                    if no_tiles:
+                        # No tiling - just copy the converted images to output
+                        for img_idx, image_path in enumerate(image_paths):
+                            # Name format: drawing{id}_page{num}.png
+                            output_name = f"drawing{drawing_id}_page{img_idx + 1}.png"
+                            output_path = output_base / output_name
+                            shutil.copy2(image_path, output_path)
+                            page_output_count += 1
+                    else:
+                        # Tile each page of the PDF
+                        for img_idx, image_path in enumerate(image_paths):
+                            tile_prefix = f"page{page_num}_pdf{img_idx + 1}"
+                            tiles = tiler.tile_image(image_path, str(output_base), prefix=tile_prefix)
+                            page_output_count += len(tiles)
+
+                    total_output += page_output_count
+
+                # Clean up temp PDF
+                Path(pdf_path).unlink(missing_ok=True)
+
+                # Update page status
+                update_page_status(job_id, page_num, 'completed', tile_count=page_output_count)
+                processed_count += 1
+
+            except Exception as e:
+                logger.error(f"Failed to process drawing {drawing_id}: {e}")
+                update_page_status(job_id, page_num, 'failed', error_message=str(e))
+
+        # Mark job as completed or failed based on results
+        output_type = "images" if no_tiles else "tiles"
+        if processed_count == len(drawing_ids):
+            mark_job_completed(job_id)
+            logger.info(f"Procore job {job_id} completed: {total_output} {output_type} generated")
+        elif processed_count > 0:
+            # Partial success
+            update_job_status(job_id, 'completed')
+            logger.warning(f"Procore job {job_id} partially completed: {processed_count}/{len(drawing_ids)} drawings")
+        else:
+            mark_job_failed(job_id, "All drawings failed to process")
+            logger.error(f"Procore job {job_id} failed: no drawings processed")
+
+    except Exception as e:
+        logger.error(f"Procore job {job_id} failed with error: {e}")
+        mark_job_failed(job_id, str(e))

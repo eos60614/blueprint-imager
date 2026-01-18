@@ -150,4 +150,24 @@ def init_database():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_uploads_status ON uploads(status)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_job_pages_job_id ON job_pages(job_id)')
 
+        # Add procore drawing columns to jobs table (T029)
+        # These columns store metadata for jobs sourced from Procore database
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'jobs' AND column_name = 'procore_drawing_ids'
+                ) THEN
+                    ALTER TABLE jobs ADD COLUMN procore_drawing_ids JSONB;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'jobs' AND column_name = 'procore_s3_keys'
+                ) THEN
+                    ALTER TABLE jobs ADD COLUMN procore_s3_keys JSONB;
+                END IF;
+            END $$;
+        ''')
+
         conn.commit()

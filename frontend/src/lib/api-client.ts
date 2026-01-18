@@ -30,6 +30,13 @@ import type {
   TileEstimateRequest,
   TileEstimateResponse,
 } from '@/types/area-selection';
+import type {
+  ListProjectsResponse,
+  ListDrawingsResponse,
+  ProcoreDrawingDetail,
+  ProcessDrawingsRequest,
+  ProcessDrawingsResponse,
+} from '@/types/procore';
 
 class ApiError extends Error {
   constructor(
@@ -318,6 +325,100 @@ export async function estimateTiles(
   });
 
   return handleResponse<TileEstimateResponse>(response);
+}
+
+// ============================================================
+// Procore Browse API functions
+// ============================================================
+
+/**
+ * List all active projects with M-series drawings.
+ */
+export async function listProcoreProjects(): Promise<ListProjectsResponse> {
+  const response = await fetch(`${config.apiUrl}/api/procore/projects`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return handleResponse<ListProjectsResponse>(response);
+}
+
+/**
+ * List M-series drawings with optional filters and pagination.
+ */
+export async function listProcoreDrawings(params: {
+  projectId?: number;
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<ListDrawingsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.projectId !== undefined) {
+    searchParams.set('project_id', params.projectId.toString());
+  }
+  if (params.search) {
+    searchParams.set('search', params.search);
+  }
+  if (params.page !== undefined) {
+    searchParams.set('page', params.page.toString());
+  }
+  if (params.limit !== undefined) {
+    searchParams.set('limit', params.limit.toString());
+  }
+
+  const queryString = searchParams.toString();
+  const url = `${config.apiUrl}/api/procore/drawings${queryString ? `?${queryString}` : ''}`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return handleResponse<ListDrawingsResponse>(response);
+}
+
+/**
+ * Get details for a single drawing.
+ */
+export async function getProcoreDrawing(drawingId: number): Promise<ProcoreDrawingDetail> {
+  const response = await fetch(`${config.apiUrl}/api/procore/drawings/${drawingId}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return handleResponse<ProcoreDrawingDetail>(response);
+}
+
+/**
+ * Process selected drawings through the tile pipeline.
+ */
+export async function processDrawings(
+  request: ProcessDrawingsRequest
+): Promise<ProcessDrawingsResponse> {
+  // Transform to snake_case for backend API
+  const payload = {
+    drawing_ids: request.drawingIds,
+    dpi: request.dpi,
+    tile_size: request.tileSize,
+    overlap: request.overlap,
+    no_tiles: request.noTiles,
+  };
+
+  const response = await fetch(`${config.apiUrl}/api/procore/process`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return handleResponse<ProcessDrawingsResponse>(response);
 }
 
 export { ApiError };

@@ -1,0 +1,431 @@
+openapi: 3.1.0
+info:
+  title: Procore Browse API
+  description: API for browsing and processing M-series drawings from Procore PostgreSQL database
+  version: 1.0.0
+  contact:
+    name: Blueprint Imager
+
+servers:
+  - url: http://localhost:3001
+    description: Development server
+  - url: https://api.blueprint-imager.com
+    description: Production server
+
+tags:
+  - name: Projects
+    description: List Procore projects
+  - name: Drawings
+    description: Browse and filter drawings
+  - name: Process
+    description: Create processing jobs for drawings
+
+paths:
+  /api/procore/projects:
+    get:
+      tags:
+        - Projects
+      summary: List all active projects
+      description: Returns all active projects from the Procore database with M-series drawings
+      operationId: listProjects
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectsResponse'
+              example:
+                projects:
+                  - id: 123456
+                    name: "Office Tower Phase 2"
+                    displayName: "OT2"
+                    projectNumber: "2024-001"
+                    active: true
+                    city: "Columbus"
+                    stateCode: "OH"
+                total: 1
+        '503':
+          description: Database connection error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Unable to connect to Procore database. Please try again later."
+
+  /api/procore/drawings:
+    get:
+      tags:
+        - Drawings
+      summary: List M-series drawings
+      description: Returns paginated list of M-series (mechanical) drawings with optional filtering
+      operationId: listDrawings
+      parameters:
+        - name: project_id
+          in: query
+          description: Filter by project ID
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: search
+          in: query
+          description: Search drawing number or title (partial match, case-insensitive)
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Results per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Paginated list of drawings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListDrawingsResponse'
+              example:
+                drawings:
+                  - id: 789
+                    projectId: 123456
+                    drawingNumber: "M-101"
+                    title: "First Floor Mechanical Plan"
+                    discipline: "M"
+                    drawingAreaName: "Mechanical"
+                    revisionNumber: "3"
+                    hasFile: true
+                    fileSize: 15728640
+                    projectName: "Office Tower Phase 2"
+                    projectNumber: "2024-001"
+                total: 45
+                page: 1
+                limit: 50
+                hasMore: false
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Database connection error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/procore/drawings/{drawing_id}:
+    get:
+      tags:
+        - Drawings
+      summary: Get single drawing details
+      description: Returns detailed information for a specific drawing including current revision
+      operationId: getDrawing
+      parameters:
+        - name: drawing_id
+          in: path
+          description: Drawing ID from Procore database
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Drawing details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrawingDetailResponse'
+        '404':
+          description: Drawing not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Drawing not found"
+        '503':
+          description: Database connection error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/procore/process:
+    post:
+      tags:
+        - Process
+      summary: Create job to process selected drawings
+      description: |
+        Creates a background processing job for the selected drawings.
+        Downloads PDFs from S3 and processes through the tile pipeline.
+        Maximum 10 drawings per batch.
+      operationId: processDrawings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessDrawingsRequest'
+            example:
+              drawingIds: [789, 790, 791]
+              dpi: 600
+              tileSize: 1920
+              overlap: 250
+      responses:
+        '202':
+          description: Job created and queued for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessDrawingsResponse'
+              example:
+                jobId: 42
+                status: "processing"
+                totalDrawings: 3
+                message: "Processing 3 drawings"
+        '400':
+          description: Invalid request (too many drawings, drawings without files, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                tooMany:
+                  summary: Too many drawings
+                  value:
+                    detail: "Maximum 10 drawings per batch"
+                noFile:
+                  summary: Drawing without file
+                  value:
+                    detail: "Drawing M-102 does not have a file available"
+                notFound:
+                  summary: Drawing not found
+                  value:
+                    detail: "Drawing with ID 999 not found"
+        '503':
+          description: Database or S3 connection error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ProcoreProject:
+      type: object
+      required:
+        - id
+        - name
+        - active
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Procore project ID
+        name:
+          type: string
+          description: Project name
+        displayName:
+          type: string
+          nullable: true
+          description: Display name
+        projectNumber:
+          type: string
+          nullable: true
+          description: Project number
+        active:
+          type: boolean
+          description: Whether project is active
+        city:
+          type: string
+          nullable: true
+          description: City
+        stateCode:
+          type: string
+          nullable: true
+          description: State code
+
+    ProcoreDrawing:
+      type: object
+      required:
+        - id
+        - projectId
+        - drawingNumber
+        - hasFile
+        - projectName
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Procore drawing ID
+        projectId:
+          type: integer
+          format: int64
+          description: Parent project ID
+        drawingNumber:
+          type: string
+          description: Drawing number (e.g., "M-101")
+        title:
+          type: string
+          nullable: true
+          description: Drawing title
+        discipline:
+          type: string
+          nullable: true
+          description: Discipline code (M, E, A, etc.)
+        drawingAreaName:
+          type: string
+          nullable: true
+          description: Drawing area name (Mechanical, Electrical, etc.)
+        revisionNumber:
+          type: string
+          nullable: true
+          description: Current revision number
+        hasFile:
+          type: boolean
+          description: Whether drawing has a file available (s3_key exists)
+        fileSize:
+          type: integer
+          nullable: true
+          description: File size in bytes
+        projectName:
+          type: string
+          description: Project name
+        projectNumber:
+          type: string
+          nullable: true
+          description: Project number
+
+    ListProjectsResponse:
+      type: object
+      required:
+        - projects
+        - total
+      properties:
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProcoreProject'
+        total:
+          type: integer
+          description: Total number of projects
+
+    ListDrawingsResponse:
+      type: object
+      required:
+        - drawings
+        - total
+        - page
+        - limit
+        - hasMore
+      properties:
+        drawings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProcoreDrawing'
+        total:
+          type: integer
+          description: Total number of matching drawings
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Results per page
+        hasMore:
+          type: boolean
+          description: Whether more pages are available
+
+    DrawingDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/ProcoreDrawing'
+        - type: object
+          properties:
+            s3Key:
+              type: string
+              nullable: true
+              description: S3 key for file (internal use)
+            filename:
+              type: string
+              nullable: true
+              description: Original filename
+
+    ProcessDrawingsRequest:
+      type: object
+      required:
+        - drawingIds
+      properties:
+        drawingIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          minItems: 1
+          maxItems: 10
+          description: Drawing IDs to process (1-10)
+        dpi:
+          type: integer
+          minimum: 72
+          maximum: 2400
+          default: 600
+          description: DPI for PDF conversion
+        tileSize:
+          type: integer
+          minimum: 512
+          maximum: 4096
+          default: 1920
+          description: Tile size in pixels
+        overlap:
+          type: integer
+          minimum: 0
+          maximum: 500
+          default: 250
+          description: Tile overlap in pixels
+
+    ProcessDrawingsResponse:
+      type: object
+      required:
+        - jobId
+        - status
+        - totalDrawings
+        - message
+      properties:
+        jobId:
+          type: integer
+          description: Created job ID
+        status:
+          type: string
+          enum: [processing]
+          description: Initial job status
+        totalDrawings:
+          type: integer
+          description: Number of drawings to process
+        message:
+          type: string
+          description: Human-readable status message
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Error message

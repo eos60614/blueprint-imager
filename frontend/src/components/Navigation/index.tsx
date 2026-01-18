@@ -16,6 +16,11 @@ const tabs: NavTab[] = [
     isActive: (pathname) => pathname === '/',
   },
   {
+    name: 'Browse',
+    href: '/browse',
+    isActive: (pathname) => pathname.startsWith('/browse'),
+  },
+  {
     name: 'History',
     href: '/history',
     isActive: (pathname) => pathname.startsWith('/history'),

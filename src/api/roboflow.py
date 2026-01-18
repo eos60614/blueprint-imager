@@ -49,12 +49,9 @@ async def upload_tiles_to_roboflow(request: UploadRequest):
     4. Sends to Roboflow
 
     Each tile is randomly assigned to a split (70% train, 20% valid, 10% test).
-    Blank tiles (80%+ white) are automatically filtered out.
-
     Errors are logged but don't fail the entire upload - continues
     processing remaining tiles.
     """
-    import json
     from pathlib import Path
 
     # Validate Roboflow is configured
@@ -76,42 +73,11 @@ async def upload_tiles_to_roboflow(request: UploadRequest):
     s3_client = S3Client()
     local_tiles_dir = Path(config.LOCAL_TILE_STORAGE_PATH) / str(request.jobId) / "tiles"
 
-    # Load tile metadata to check for blank tiles
-    # Group tiles by page for efficient metadata loading
-    tiles_by_page: dict[int, list] = {}
-    for tile in request.tiles:
-        if tile.pageNum not in tiles_by_page:
-            tiles_by_page[tile.pageNum] = []
-        tiles_by_page[tile.pageNum].append(tile)
-
-    # Load metadata for each page from local storage
-    page_metadata: dict[int, dict] = {}
-    for page_num in tiles_by_page.keys():
-        metadata_path = local_tiles_dir / f"page_{page_num}_metadata.json"
-        try:
-            with open(metadata_path, 'r') as f:
-                metadata_list = json.load(f)
-            # Create lookup dict by (row, col)
-            page_metadata[page_num] = {
-                (m['row'], m['col']): m for m in metadata_list
-            }
-        except Exception:
-            # Metadata doesn't exist (older jobs), assume no blanks
-            page_metadata[page_num] = {}
-
-    # Build tile data, filtering out blank tiles
     # Upload tiles to S3 and generate presigned URLs
     tiles_to_upload = []
-    skipped_blank = 0
     uploaded_to_s3 = 0
 
     for tile in request.tiles:
-        # Check if tile is blank
-        meta = page_metadata.get(tile.pageNum, {}).get((tile.row, tile.col), {})
-        if meta.get('is_blank', False):
-            skipped_blank += 1
-            continue
-
         # Local tile path
         filename = f"page_{tile.pageNum}_tile_{tile.row}_{tile.col}.png"
         local_tile_path = local_tiles_dir / filename
@@ -144,12 +110,9 @@ async def upload_tiles_to_roboflow(request: UploadRequest):
         })
 
     if not tiles_to_upload:
-        message = "None of the selected tiles exist locally"
-        if skipped_blank > 0:
-            message = f"All {skipped_blank} selected tiles were blank and skipped"
         raise HTTPException(
             status_code=404,
-            detail={"error": "No tiles found", "message": message}
+            detail={"error": "No tiles found", "message": "None of the selected tiles exist locally"}
         )
 
     # Upload to Roboflow

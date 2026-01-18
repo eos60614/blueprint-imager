@@ -6,6 +6,15 @@ from botocore.exceptions import ClientError
 from ..config import config
 
 
+def get_procore_s3_client() -> 'S3Client':
+    """Create an S3Client configured for the Procore S3 bucket."""
+    return S3Client(
+        bucket_name=config.PROCORE_S3_BUCKET,
+        access_key_id=config.PROCORE_AWS_ACCESS_KEY_ID,
+        secret_access_key=config.PROCORE_AWS_SECRET_ACCESS_KEY
+    )
+
+
 class S3Client:
     def __init__(
         self,

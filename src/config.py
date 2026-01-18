@@ -42,12 +42,62 @@ class Config:
     # Upload limits
     MAX_FILE_SIZE: int = int(os.environ.get('MAX_FILE_SIZE', str(500 * 1024 * 1024)))  # 500MB
 
-    # Procore (existing)
+    # Procore OAuth (existing)
     PROCORE_CLIENT_ID: str = os.environ.get('PROCORE_CLIENT_ID', '')
     PROCORE_CLIENT_SECRET: str = os.environ.get('PROCORE_CLIENT_SECRET', '')
     PROCORE_API_BASE_URL: str = os.environ.get('PROCORE_API_BASE_URL', 'https://sandbox.procore.com')
     PROCORE_AUTH_BASE_URL: str = os.environ.get('PROCORE_AUTH_BASE_URL', 'https://login-sandbox.procore.com')
     PROCORE_COMPANY_ID: str = os.environ.get('PROCORE_COMPANY_ID', '')
+
+    # Procore PostgreSQL Database (external, read-only)
+    # Supports both URI format (procore_int_v2_DB_URI) and individual vars
+    _PROCORE_DB_URI: str = os.environ.get('procore_int_v2_DB_URI', '')
+
+    @property
+    def PROCORE_DB_HOST(self) -> str:
+        if self._PROCORE_DB_URI:
+            # Parse from URI: postgresql://user:pass@host:port/dbname
+            from urllib.parse import urlparse
+            parsed = urlparse(self._PROCORE_DB_URI)
+            return parsed.hostname or ''
+        return os.environ.get('PROCORE_DB_HOST', '')
+
+    @property
+    def PROCORE_DB_PORT(self) -> int:
+        if self._PROCORE_DB_URI:
+            from urllib.parse import urlparse
+            parsed = urlparse(self._PROCORE_DB_URI)
+            return parsed.port or 5432
+        return int(os.environ.get('PROCORE_DB_PORT', '5432'))
+
+    @property
+    def PROCORE_DB_NAME(self) -> str:
+        if self._PROCORE_DB_URI:
+            from urllib.parse import urlparse
+            parsed = urlparse(self._PROCORE_DB_URI)
+            return parsed.path.lstrip('/') if parsed.path else 'procore_int_v2'
+        return os.environ.get('PROCORE_DB_NAME', 'procore_int_v2')
+
+    @property
+    def PROCORE_DB_USER(self) -> str:
+        if self._PROCORE_DB_URI:
+            from urllib.parse import urlparse
+            parsed = urlparse(self._PROCORE_DB_URI)
+            return parsed.username or ''
+        return os.environ.get('PROCORE_DB_USER', '')
+
+    @property
+    def PROCORE_DB_PASSWORD(self) -> str:
+        if self._PROCORE_DB_URI:
+            from urllib.parse import urlparse
+            parsed = urlparse(self._PROCORE_DB_URI)
+            return parsed.password or ''
+        return os.environ.get('PROCORE_DB_PASSWORD', '')
+
+    # Procore S3 Bucket (for drawing files)
+    PROCORE_S3_BUCKET: str = os.environ.get('procore_int_v2_S3_BUCKET_NAME', os.environ.get('PROCORE_S3_BUCKET', ''))
+    PROCORE_AWS_ACCESS_KEY_ID: str = os.environ.get('procore_int_v2_AWS_ACCESS_KEY_ID', '')
+    PROCORE_AWS_SECRET_ACCESS_KEY: str = os.environ.get('procore_int_v2_AWS_SECRET_ACCESS_KEY', '')
 
     # CORS (comma-separated list of allowed origins)
     CORS_ORIGINS: list = os.environ.get(

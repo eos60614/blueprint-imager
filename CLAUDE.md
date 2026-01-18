@@ -232,6 +232,8 @@ Configure in Vercel dashboard:
 ## Active Technologies
 - Python 3.11+ (Backend), TypeScript 5.x (Frontend) + FastAPI, Next.js 14 (App Router), pdfjs-dist, SWR, Tailwind CSS (005-browse-history)
 - SQLite (jobs/uploads), AWS S3 (PDFs/tiles), localStorage (history references) (005-browse-history)
+- Python 3.11+ (Backend), TypeScript 5.x (Frontend) + FastAPI, psycopg2, boto3, Next.js 14 (App Router), SWR, Tailwind CSS (007-procore-postgres-drawings)
+- External PostgreSQL (`procore_int_v2`), Separate S3 bucket (`PROCORE_S3_BUCKET`) (007-procore-postgres-drawings)
 
 ## Recent Changes
 - 005-browse-history: Added Python 3.11+ (Backend), TypeScript 5.x (Frontend) + FastAPI, Next.js 14 (App Router), pdfjs-dist, SWR, Tailwind CSS
