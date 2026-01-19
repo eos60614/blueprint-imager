@@ -33,6 +33,8 @@ import type {
 import type {
   ListProjectsResponse,
   ListDrawingsResponse,
+  ProcoreProject,
+  ProcoreDrawing,
   ProcoreDrawingDetail,
   ProcessDrawingsRequest,
   ProcessDrawingsResponse,
@@ -331,6 +333,34 @@ export async function estimateTiles(
 // Procore Browse API functions
 // ============================================================
 
+// Transform snake_case API response to camelCase for frontend
+interface ApiProject {
+  id: number;
+  name: string;
+  display_name?: string;
+  project_number?: string;
+  active: boolean;
+  city?: string;
+  state_code?: string;
+}
+
+interface ApiListProjectsResponse {
+  projects: ApiProject[];
+  total: number;
+}
+
+function transformProject(p: ApiProject): ProcoreProject {
+  return {
+    id: p.id,
+    name: p.name,
+    displayName: p.display_name,
+    projectNumber: p.project_number,
+    active: p.active,
+    city: p.city,
+    stateCode: p.state_code,
+  };
+}
+
 /**
  * List all active projects with M-series drawings.
  */
@@ -342,12 +372,56 @@ export async function listProcoreProjects(): Promise<ListProjectsResponse> {
     },
   });
 
-  return handleResponse<ListProjectsResponse>(response);
+  const data = await handleResponse<ApiListProjectsResponse>(response);
+
+  return {
+    projects: data.projects.map(transformProject),
+    total: data.total,
+  };
 }
 
 /**
  * List M-series drawings with optional filters and pagination.
  */
+// Transform snake_case API response to camelCase for frontend
+interface ApiDrawing {
+  id: number;
+  project_id: number;
+  drawing_number: string;
+  title?: string;
+  discipline?: string;
+  drawing_area_name?: string;
+  revision_number?: string;
+  has_file: boolean;
+  file_size?: number;
+  project_name: string;
+  project_number?: string;
+}
+
+interface ApiListDrawingsResponse {
+  drawings: ApiDrawing[];
+  total: number;
+  page: number;
+  limit: number;
+  has_more: boolean;
+}
+
+function transformDrawing(d: ApiDrawing): ProcoreDrawing {
+  return {
+    id: d.id,
+    projectId: d.project_id,
+    drawingNumber: d.drawing_number,
+    title: d.title,
+    discipline: d.discipline,
+    drawingAreaName: d.drawing_area_name,
+    revisionNumber: d.revision_number,
+    hasFile: d.has_file,
+    fileSize: d.file_size,
+    projectName: d.project_name,
+    projectNumber: d.project_number,
+  };
+}
+
 export async function listProcoreDrawings(params: {
   projectId?: number;
   search?: string;
@@ -378,7 +452,28 @@ export async function listProcoreDrawings(params: {
     },
   });
 
-  return handleResponse<ListDrawingsResponse>(response);
+  const data = await handleResponse<ApiListDrawingsResponse>(response);
+
+  return {
+    drawings: data.drawings.map(transformDrawing),
+    total: data.total,
+    page: data.page,
+    limit: data.limit,
+    hasMore: data.has_more,
+  };
+}
+
+interface ApiDrawingDetail extends ApiDrawing {
+  s3_key?: string;
+  filename?: string;
+}
+
+function transformDrawingDetail(d: ApiDrawingDetail): ProcoreDrawingDetail {
+  return {
+    ...transformDrawing(d),
+    s3Key: d.s3_key,
+    filename: d.filename,
+  };
 }
 
 /**
@@ -392,7 +487,15 @@ export async function getProcoreDrawing(drawingId: number): Promise<ProcoreDrawi
     },
   });
 
-  return handleResponse<ProcoreDrawingDetail>(response);
+  const data = await handleResponse<ApiDrawingDetail>(response);
+  return transformDrawingDetail(data);
+}
+
+interface ApiProcessDrawingsResponse {
+  job_id: number;
+  status: string;
+  total_drawings: number;
+  message: string;
 }
 
 /**
@@ -418,7 +521,14 @@ export async function processDrawings(
     body: JSON.stringify(payload),
   });
 
-  return handleResponse<ProcessDrawingsResponse>(response);
+  const data = await handleResponse<ApiProcessDrawingsResponse>(response);
+
+  return {
+    jobId: data.job_id,
+    status: data.status,
+    totalDrawings: data.total_drawings,
+    message: data.message,
+  };
 }
 
 export { ApiError };
