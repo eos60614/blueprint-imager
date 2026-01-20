@@ -99,7 +99,12 @@ export function SelectionProvider({ children, pageCount }: SelectionProviderProp
             return next;
           });
         } catch (error) {
-          console.error(`Failed to render thumbnail for page ${pageNum}:`, error);
+          // Ignore "Transport destroyed" errors - these happen when navigating away
+          // while thumbnails are still loading, which is expected behavior
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (!errorMessage.includes('Transport destroyed')) {
+            console.error(`Failed to render thumbnail for page ${pageNum}:`, error);
+          }
         }
       }
     },

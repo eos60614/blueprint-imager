@@ -99,6 +99,10 @@ class Config:
     PROCORE_AWS_ACCESS_KEY_ID: str = os.environ.get('procore_int_v2_AWS_ACCESS_KEY_ID', '')
     PROCORE_AWS_SECRET_ACCESS_KEY: str = os.environ.get('procore_int_v2_AWS_SECRET_ACCESS_KEY', '')
 
+    # Readonly Procore S3 (alternative bucket for drawing files)
+    READONLY_PROCORE_S3_BUCKET: str = os.environ.get('READONLY_PROCORE_S3_BUCKET_NAME', '')
+    READONLY_PROCORE_PATH: str = os.environ.get('READONLY_PROCORE_PATH', '')
+
     # CORS (comma-separated list of allowed origins)
     CORS_ORIGINS: list = os.environ.get(
         'CORS_ORIGINS',

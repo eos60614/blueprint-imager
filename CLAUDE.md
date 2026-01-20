@@ -4,10 +4,10 @@
 PDF to Image converter for YOLO training. Converts mechanical drawings (M-series from Procore and manual uploads) to tiled PNG images at 600 DPI with 1920x1920 tiles and 13% overlap.
 
 ## Current Feature
-**Branch**: 005-browse-history
+**Branch**: 008-responsive-preview-layout
 **Status**: Implementation complete
-**Spec**: `/specs/005-browse-history/spec.md`
-**Plan**: `/specs/005-browse-history/plan.md`
+**Spec**: `/specs/008-responsive-preview-layout/spec.md`
+**Plan**: `/specs/008-responsive-preview-layout/plan.md`
 
 ## Tech Stack
 
@@ -234,6 +234,9 @@ Configure in Vercel dashboard:
 - SQLite (jobs/uploads), AWS S3 (PDFs/tiles), localStorage (history references) (005-browse-history)
 - Python 3.11+ (Backend), TypeScript 5.x (Frontend) + FastAPI, psycopg2, boto3, Next.js 14 (App Router), SWR, Tailwind CSS (007-procore-postgres-drawings)
 - External PostgreSQL (`procore_int_v2`), Separate S3 bucket (`PROCORE_S3_BUCKET`) (007-procore-postgres-drawings)
+- TypeScript 5.x + Next.js 14 (App Router), Tailwind CSS, React, SWR (008-responsive-preview-layout)
+- N/A (frontend-only feature) (008-responsive-preview-layout)
 
 ## Recent Changes
+- 008-responsive-preview-layout: Responsive layout for large format PDFs with thumbnails, hover preview, and dynamic container sizing
 - 005-browse-history: Added Python 3.11+ (Backend), TypeScript 5.x (Frontend) + FastAPI, Next.js 14 (App Router), pdfjs-dist, SWR, Tailwind CSS

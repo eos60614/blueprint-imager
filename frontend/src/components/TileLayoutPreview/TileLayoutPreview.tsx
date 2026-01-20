@@ -9,6 +9,8 @@ interface TileLayoutPreviewProps {
   tileSize: number;
   overlap: number;
   noTiles: boolean;
+  fullWidth?: boolean;
+  previewHeight?: string;
 }
 
 interface Dimensions {
@@ -32,6 +34,8 @@ export function TileLayoutPreview({
   tileSize,
   overlap,
   noTiles,
+  fullWidth = false,
+  previewHeight = '300px',
 }: TileLayoutPreviewProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewDimensions, setPreviewDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -204,10 +208,10 @@ export function TileLayoutPreview({
 
   // Preview with overlay
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${fullWidth ? 'w-full' : ''}`}>
       <div className="relative bg-gray-100 border border-gray-200 rounded-lg overflow-hidden">
         {previewUrl && previewDimensions && (
-          <div className="relative" style={{ maxHeight: '300px', overflow: 'auto' }}>
+          <div className="relative" style={{ maxHeight: previewHeight, overflow: 'auto' }}>
             <img
               src={previewUrl}
               alt="Drawing preview"

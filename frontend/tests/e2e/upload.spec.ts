@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
+import path from 'path';
 
-const TEST_PDF_PATH = '/home/niravsapra/Downloads/Porter Multi Page.pdf.pdf';
+const TEST_PDF_PATH = path.join(__dirname, '../fixtures/test-sample.pdf');
 
 test.describe('PDF Upload', () => {
   test.beforeEach(async ({ page }) => {
@@ -27,7 +28,7 @@ test.describe('PDF Upload', () => {
     await expect(page.getByText('Upload complete')).toBeVisible({ timeout: 30000 });
 
     // Verify the filename is displayed
-    await expect(page.getByText('Porter Multi Page.pdf.pdf')).toBeVisible();
+    await expect(page.getByText('test-sample.pdf')).toBeVisible();
 
     // Step 2 should now be visible with page selection
     await expect(page.getByText('Step 2: Select Pages')).toBeVisible();

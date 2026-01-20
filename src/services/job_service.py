@@ -587,7 +587,9 @@ def process_procore_drawings(job_id: int) -> None:
     no_tiles = job_data['no_tiles']
 
     # Initialize clients
-    procore_s3 = S3Client(bucket_name=config.PROCORE_S3_BUCKET)
+    # Prefer readonly bucket if configured, otherwise use main Procore bucket
+    bucket_name = config.READONLY_PROCORE_S3_BUCKET or config.PROCORE_S3_BUCKET
+    procore_s3 = S3Client(bucket_name=bucket_name)
     processor = PDFProcessor(dpi=dpi)
 
     # Only create tiler if we need tiles
@@ -611,8 +613,13 @@ def process_procore_drawings(job_id: int) -> None:
                 update_page_status(job_id, page_num, 'processing')
 
                 # Download PDF from Procore S3
+                # Prepend path prefix if configured and key doesn't already have it
+                full_s3_key = s3_key
+                if config.READONLY_PROCORE_PATH and not s3_key.startswith(config.READONLY_PROCORE_PATH):
+                    full_s3_key = f"{config.READONLY_PROCORE_PATH}{s3_key}"
+
                 with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
-                    procore_s3.download_file(s3_key, tmp_pdf.name)
+                    procore_s3.download_file(full_s3_key, tmp_pdf.name)
                     pdf_path = tmp_pdf.name
 
                 # Convert PDF to images

@@ -65,3 +65,26 @@ export interface ProcessDrawingsResponse {
   totalDrawings: number;
   message: string;
 }
+
+/**
+ * State for a single drawing thumbnail in the browse list
+ */
+export interface DrawingThumbnailState {
+  drawingId: number;
+  status: 'idle' | 'loading' | 'loaded' | 'error';
+  imageUrl: string | null;
+  error: string | null;
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Props for the DrawingThumbnail component
+ */
+export interface DrawingThumbnailProps {
+  drawingId: number;
+  hasFile: boolean;
+  drawingNumber: string;  // For alt text
+  onHover?: (drawingId: number | null) => void;
+  size?: 'sm' | 'md' | 'lg';  // sm=60px, md=80px, lg=120px
+}

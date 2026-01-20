@@ -354,11 +354,19 @@ async def get_drawing_preview(
             raise HTTPException(status_code=400, detail="Drawing has no file available")
 
         # Initialize S3 client for Procore bucket
-        s3_client = S3Client(bucket_name=config.PROCORE_S3_BUCKET)
+        # Prefer readonly bucket if configured, otherwise use main Procore bucket
+        bucket_name = config.READONLY_PROCORE_S3_BUCKET or config.PROCORE_S3_BUCKET
+        s3_client = S3Client(bucket_name=bucket_name)
+
+        # Build the full S3 key with optional path prefix
+        # Only prepend if the s3_key doesn't already start with the prefix
+        s3_key = drawing.s3_key
+        if config.READONLY_PROCORE_PATH and not s3_key.startswith(config.READONLY_PROCORE_PATH):
+            s3_key = f"{config.READONLY_PROCORE_PATH}{s3_key}"
 
         # Download PDF to temp file
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=True) as tmp_pdf:
-            s3_client.download_file(drawing.s3_key, tmp_pdf.name)
+            s3_client.download_file(s3_key, tmp_pdf.name)
 
             # Convert first page to low-res image
             images = convert_from_path(
@@ -424,11 +432,19 @@ async def get_drawing_dimensions(
             raise HTTPException(status_code=400, detail="Drawing has no file available")
 
         # Initialize S3 client for Procore bucket
-        s3_client = S3Client(bucket_name=config.PROCORE_S3_BUCKET)
+        # Prefer readonly bucket if configured, otherwise use main Procore bucket
+        bucket_name = config.READONLY_PROCORE_S3_BUCKET or config.PROCORE_S3_BUCKET
+        s3_client = S3Client(bucket_name=bucket_name)
+
+        # Build the full S3 key with optional path prefix
+        # Only prepend if the s3_key doesn't already start with the prefix
+        s3_key = drawing.s3_key
+        if config.READONLY_PROCORE_PATH and not s3_key.startswith(config.READONLY_PROCORE_PATH):
+            s3_key = f"{config.READONLY_PROCORE_PATH}{s3_key}"
 
         # Download PDF to temp file
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=True) as tmp_pdf:
-            s3_client.download_file(drawing.s3_key, tmp_pdf.name)
+            s3_client.download_file(s3_key, tmp_pdf.name)
 
             # Convert first page at target DPI to get dimensions
             images = convert_from_path(

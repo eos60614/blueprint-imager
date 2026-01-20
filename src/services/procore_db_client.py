@@ -116,7 +116,7 @@ class ProcoreDBClient:
     @classmethod
     def list_projects(cls) -> List[ProcoreProject]:
         """
-        List all active projects that have M-series drawings.
+        List all active projects that have M-series drawings with S3 files.
 
         Returns:
             List of ProcoreProject instances.
@@ -132,8 +132,10 @@ class ProcoreDBClient:
                 p.state_code
             FROM projects p
             INNER JOIN drawings d ON d.project_id = p.id
+            INNER JOIN drawing_revisions dr ON dr.drawing_id = d.id AND dr.current = true
             WHERE p.active = true
               AND LOWER(d.discipline) = 'mechanical'
+              AND dr.s3_key IS NOT NULL
             ORDER BY p.name
         """
         with cls.get_cursor() as cursor:

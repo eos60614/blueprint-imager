@@ -33,7 +33,7 @@ export function ProcessingSettingsPanel({
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
       <h3 className="text-sm font-medium text-gray-900 mb-3">Processing Settings</h3>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* DPI */}
         <div>
           <label htmlFor="dpi" className="block text-xs font-medium text-gray-700 mb-1">

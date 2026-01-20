@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { useProjects } from '@/hooks/useProjects';
 import { useDrawings } from '@/hooks/useDrawings';
 import { useJobStatus } from '@/hooks/useJobStatus';
+import { useWindowSize } from '@/hooks/useWindowSize';
 import { DrawingFilters } from '@/components/DrawingFilters/DrawingFilters';
 import { DrawingList } from '@/components/DrawingList/DrawingList';
 import { DrawingProcessButton } from '@/components/DrawingProcessButton/DrawingProcessButton';
@@ -31,6 +32,7 @@ export default function BrowsePage() {
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<ProcessingSettings>(DEFAULT_SETTINGS);
 
+  const { layoutConfig } = useWindowSize();
   const { projects, isLoading: projectsLoading, error: projectsError } = useProjects();
 
   const {
@@ -119,7 +121,10 @@ export default function BrowsePage() {
   if (projectsError || drawingsError) {
     const err = projectsError || drawingsError;
     return (
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div
+        className="mx-auto px-4 sm:px-6 lg:px-8 py-8"
+        style={{ maxWidth: layoutConfig.containerMaxWidth }}
+      >
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center">
             <svg
@@ -151,7 +156,10 @@ export default function BrowsePage() {
   const showJobError = activeJobId !== null && jobStatus === 'failed';
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div
+      className="mx-auto px-4 sm:px-6 lg:px-8 py-8"
+      style={{ maxWidth: layoutConfig.containerMaxWidth }}
+    >
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Browse Drawings</h1>
@@ -245,6 +253,8 @@ export default function BrowsePage() {
             tileSize={settings.tileSize}
             overlap={settings.overlap}
             noTiles={settings.noTiles}
+            fullWidth
+            previewHeight={layoutConfig.previewPanelHeight}
           />
           {selectedDrawingIds.size > 1 && (
             <p className="mt-2 text-xs text-gray-500 text-center">
@@ -274,6 +284,8 @@ export default function BrowsePage() {
         selectedDrawingIds={selectedDrawingIds}
         onSelectionChange={handleSelectionChange}
         selectionEnabled={!showJobStatus}
+        showThumbnails={layoutConfig.showThumbnailColumn}
+        thumbnailSize={layoutConfig.thumbnailSize}
       />
     </div>
   );

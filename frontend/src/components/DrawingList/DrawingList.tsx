@@ -1,6 +1,7 @@
 'use client';
 
 import type { ProcoreDrawing } from '@/types/procore';
+import { DrawingThumbnail } from '@/components/DrawingThumbnail';
 
 interface DrawingListProps {
   drawings: ProcoreDrawing[];
@@ -13,6 +14,8 @@ interface DrawingListProps {
   selectedDrawingIds?: Set<number>;
   onSelectionChange?: (drawingId: number, selected: boolean) => void;
   selectionEnabled?: boolean;
+  showThumbnails?: boolean;
+  thumbnailSize?: 'sm' | 'md' | 'lg';
 }
 
 function formatFileSize(bytes: number | undefined): string {
@@ -38,6 +41,8 @@ export function DrawingList({
   selectedDrawingIds = new Set(),
   onSelectionChange,
   selectionEnabled = false,
+  showThumbnails = true,
+  thumbnailSize = 'md',
 }: DrawingListProps) {
   const startItem = (page - 1) * limit + 1;
   const endItem = Math.min(page * limit, total);
@@ -107,6 +112,11 @@ export function DrawingList({
                   <span className="sr-only">Select</span>
                 </th>
               )}
+              {showThumbnails && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                  Preview
+                </th>
+              )}
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Drawing
               </th>
@@ -147,6 +157,16 @@ export function DrawingList({
                         }
                         className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         title={canSelect ? 'Select for processing' : 'No file available'}
+                      />
+                    </td>
+                  )}
+                  {showThumbnails && (
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      <DrawingThumbnail
+                        drawingId={drawing.id}
+                        hasFile={drawing.hasFile}
+                        drawingNumber={drawing.drawingNumber}
+                        size={thumbnailSize}
                       />
                     </td>
                   )}

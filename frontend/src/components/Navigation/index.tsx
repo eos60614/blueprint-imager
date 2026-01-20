@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useWindowSize } from '@/hooks/useWindowSize';
 
 interface NavTab {
   name: string;
@@ -29,10 +30,14 @@ const tabs: NavTab[] = [
 
 export function Navigation() {
   const pathname = usePathname();
+  const { layoutConfig } = useWindowSize();
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div
+        className="mx-auto px-4 sm:px-6 lg:px-8"
+        style={{ maxWidth: layoutConfig.containerMaxWidth }}
+      >
         <div className="flex items-center justify-between h-14">
           {/* Logo/Brand */}
           <Link
