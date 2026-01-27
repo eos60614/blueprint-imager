@@ -379,8 +379,23 @@ Feature specs are in `/specs/` directories:
 - `002-i-want-to/`: Frontend upload interface
 - `005-browse-history/`: History browsing
 - `006-feature-that-will/`: Area selection & tile estimates
+- `007-hvac-detection/`: HVAC component detection (text/geometry extraction + ML)
 
 Each contains: spec.md, data-model.md, plan.md, quickstart.md, research.md, tasks.md
+
+## Planned: HVAC Component Detection
+
+Three-layer strategy for detecting HVAC components from CAD PDFs:
+
+1. **Text Extraction**: Extract equipment tags (FD-1, VAV-2A, etc.) directly from PDF text objects using pdfplumber. Tags have coordinates.
+
+2. **Geometry Extraction**: Extract vector geometry (lines, rectangles, curves). Ductwork often represented as parallel lines or rectangles.
+
+3. **Object Detection**: YOLOv8 "hound pack" - one single-class model per component type (fire dampers, VAVs, diffusers, etc.). Train in Roboflow, deploy locally.
+
+**Schedule-Driven Detection**: Parse mechanical schedules first to know what components exist. Cross-validate detection counts against schedule counts.
+
+See `/specs/007-hvac-detection/` for full specification.
 
 ---
 *Context for Claude Code - Last updated: 2026-01-27*
